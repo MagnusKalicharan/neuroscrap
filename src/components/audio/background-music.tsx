@@ -9,8 +9,10 @@ interface BackgroundMusicProps {
   className?: string;
 }
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 export function BackgroundMusic({
-  src = "/audio/neuro-scrap-bgm.mp3",
+  src = `${BASE_PATH}/audio/neuro-scrap-bgm.mp3`,
   defaultVolume = 0.4,
   className = "",
 }: BackgroundMusicProps) {
