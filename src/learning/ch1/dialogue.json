@@ -1,0 +1,66 @@
+{
+  "beat1": [
+    {
+      "speaker": "ORACLE",
+      "text": "Airlock status: SAFE. Please proceed outside.",
+      "expression": "neutral"
+    },
+    {
+      "speaker": "SCRAP",
+      "text": "...I cannot decide. My brain has no rules.",
+      "expression": "confused"
+    }
+  ],
+  "beat2": [
+    {
+      "speaker": "ORACLE",
+      "text": "Neural core damaged. Reconnect the decision circuit.\nOne neuron is enough to begin.",
+      "expression": "glitch"
+    }
+  ],
+  "beat3": [
+    {
+      "speaker": "ORACLE",
+      "text": "Make the neuron say OPEN for Case 1.\nExperiment with the connection strengths.",
+      "expression": "instructive"
+    }
+  ],
+  "beat4": [
+    {
+      "speaker": "SCRAP",
+      "text": "Signals detected. Each line strengthens or weakens the flow.",
+      "expression": "curious"
+    },
+    {
+      "speaker": "ORACLE",
+      "text": "You just changed a WEIGHT.\nThis is the strength of one connection.",
+      "expression": "analytical"
+    }
+  ],
+  "beat5_warning": [
+    {
+      "speaker": "ORACLE",
+      "text": "Sensors nominal. Atmosphere looks clear. Airlock status: SAFE.",
+      "expression": "confident"
+    },
+    {
+      "speaker": "SCRAP",
+      "text": "Wait. Atmospheric readings show deadly cosmic radiation.\nMy neuron demands: SHUT.",
+      "expression": "alarmed"
+    }
+  ],
+  "beat5_oracle_wrong": [
+    {
+      "speaker": "ORACLE",
+      "text": "...I was wrong. Radiation flare detected.\nYour brain is more reliable than mine. For now.",
+      "expression": "recalibrating"
+    }
+  ],
+  "beat5_fail_retry": [
+    {
+      "speaker": "ORACLE",
+      "text": "CRITICAL HULL WARNING: Radiation spike breached the airlock!\nEmergency seals engaged. Re-evaluate your decision.",
+      "expression": "critical"
+    }
+  ]
+}

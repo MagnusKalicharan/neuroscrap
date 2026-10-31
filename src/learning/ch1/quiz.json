@@ -1,0 +1,95 @@
+[
+  {
+    "id": "q1",
+    "question": "In your neuron, you increase the weight of Air quality. What happens?",
+    "options": [
+      {
+        "id": "a",
+        "text": "That input pushes the decision more strongly",
+        "isCorrect": true,
+        "feedback": "Correct! A weight multiplies its input, so a bigger weight makes that input count more in the sum."
+      },
+      {
+        "id": "b",
+        "text": "The neuron becomes slower",
+        "isCorrect": false,
+        "feedback": "Incorrect. Weights change the mathematical strength of the signal, not processing latency."
+      },
+      {
+        "id": "c",
+        "text": "The other weights change automatically",
+        "isCorrect": false,
+        "feedback": "Incorrect. Each weight is independent and represents a distinct physical or virtual connection."
+      },
+      {
+        "id": "d",
+        "text": "The bias resets to zero",
+        "isCorrect": false,
+        "feedback": "Incorrect. The bias is an independent parameter and is unaffected by weight changes."
+      }
+    ],
+    "explanation": "A weight multiplies its input, so a bigger weight makes that input count more in the sum."
+  },
+  {
+    "id": "q2",
+    "question": "Radiation has a NEGATIVE weight. What does high radiation do?",
+    "options": [
+      {
+        "id": "a",
+        "text": "Pushes the sum toward OPEN",
+        "isCorrect": false,
+        "feedback": "Incorrect. A positive input multiplied by a negative weight subtracts from the sum."
+      },
+      {
+        "id": "b",
+        "text": "Pushes the sum toward SHUT",
+        "isCorrect": true,
+        "feedback": "Correct! A negative weight times a positive input produces a negative value, pulling the sum below zero toward SHUT."
+      },
+      {
+        "id": "c",
+        "text": "Has no effect",
+        "isCorrect": false,
+        "feedback": "Incorrect. Non-zero weights always exert mathematical influence proportional to their input."
+      },
+      {
+        "id": "d",
+        "text": "Turns the neuron off",
+        "isCorrect": false,
+        "feedback": "Incorrect. The neuron continues calculating; the sum simply turns negative."
+      }
+    ],
+    "explanation": "Negative weight times a big input gives a big negative number, which lowers the sum and leads to SHUT."
+  },
+  {
+    "id": "q3",
+    "question": "What does the bias do?",
+    "options": [
+      {
+        "id": "a",
+        "text": "Measures the radiation",
+        "isCorrect": false,
+        "feedback": "Incorrect. Radiation is measured by the sensor input x3, not the bias parameter."
+      },
+      {
+        "id": "b",
+        "text": "Adds an extra push that shifts how willing the neuron is to say OPEN",
+        "isCorrect": true,
+        "feedback": "Correct! Bias is added to the sum regardless of the inputs, shifting the baseline threshold."
+      },
+      {
+        "id": "c",
+        "text": "Connects two neurons",
+        "isCorrect": false,
+        "feedback": "Incorrect. Synapses and layers connect neurons; bias is an internal offset within a single neuron."
+      },
+      {
+        "id": "d",
+        "text": "Stores the last decision",
+        "isCorrect": false,
+        "feedback": "Incorrect. A feed-forward neuron has no memory state; bias is a constant shift added each step."
+      }
+    ],
+    "explanation": "Bias is added to the sum no matter what the inputs are, so it moves the point where the decision flips."
+  }
+]

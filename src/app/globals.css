@@ -1,26 +1,80 @@
 @import "tailwindcss";
 
+/* ── Custom font variables ─────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-mono: "Share Tech Mono", ui-monospace, monospace;
+  --font-display: "Rajdhani", system-ui, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ── Base resets ──────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #050806;
+  color: #fff;
 }
 
+/* ── Typography ───────────────────────────────────────── */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-display);
 }
+
+.font-mono,
+[class*="font-mono"] {
+  font-family: var(--font-mono);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+/* ── Utility: subtle pulse glow on cyan elements ─────── */
+@keyframes cyanPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+
+.glow-pulse {
+  animation: cyanPulse 2s ease-in-out infinite;
+}
+
+/* ── Background overlay classes ──────────────────────────
+   Kept in CSS (not inline style) so Dark Reader cannot
+   rewrite the shorthand into longhand properties, which
+   would trigger a React hydration mismatch.
+   ─────────────────────────────────────────────────────── */
+
+/* Cinematic radial vignette: soft perimeter darkening, leaves bottom-left 3D moss open & bright */
+.bg-vignette {
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    transparent 55%,
+    rgba(5, 8, 6, 0.30) 82%,
+    rgba(5, 8, 6, 0.65) 100%
+  );
+}
+
+/* Left-panel anchor: neutralized so bottom-left terrain is clearly visible */
+.bg-left-anchor {
+  display: none;
+}
+
+/* CRT scanline grid */
+.bg-scanlines {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 255, 0.15) 2px,
+    rgba(0, 255, 255, 0.15) 4px
+  );
+}
+
