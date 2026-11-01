@@ -1,0 +1,144 @@
+/* ==========================================================================
+   NEON NOIR DESIGN SYSTEM
+   Blade Runner-inspired industrial sci-fi aesthetic for Neuro-Scrap.
+   ========================================================================== */
+
+:root {
+  /* ── Core Palette ──────────────────────────────────────────────────────── */
+  --void: #04060B;          /* Deepest backdrop shadow */
+  --haze: #0B1F2A;          /* Atmospheric ambient mist / fog */
+  --steel: #1A2733;         /* Cold industrial chassis / dark metal */
+  --steel-lit: #34495A;     /* Catch-lights, rims, and bevel edges */
+  
+  /* ── Neon Hues ─────────────────────────────────────────────────────────── */
+  --neon-cyan: #19F0FF;     /* Charge, energy, nominal status */
+  --neon-magenta: #FF2E88;  /* Warning, severe fault accent */
+  --sodium: #FF9A1F;        /* Amber hazard, corrosion, fracture leaks */
+  --core-white: #FFF4E0;    /* Incandescent neon core / hot plasma centre */
+  
+  /* ── Typography & Interface ────────────────────────────────────────────── */
+  --text: #C9D6E2;          /* Primary legible readout */
+  --text-dim: #7F93A6;      /* Secondary legends and stamped etchings */
+
+  /* ── Font Stacks ───────────────────────────────────────────────────────── */
+  --font-noir-condensed: var(--font-condensed), "Chakra Petch", "Oxanium", "Rajdhani", sans-serif;
+  --font-noir-mono: var(--font-mono), "Share Tech Mono", monospace;
+
+  /* ── Neon Glow Filter / Shadow Recipes (Core + Coloured Halo) ─────────── */
+  --glow-cyan-tight: 0 0 2px var(--core-white), 0 0 6px var(--neon-cyan);
+  --glow-cyan-wide:  0 0 2px var(--core-white), 0 0 8px var(--neon-cyan), 0 0 20px rgba(25, 240, 255, 0.45);
+  --glow-sodium-tight: 0 0 2px var(--core-white), 0 0 6px var(--sodium);
+  --glow-sodium-wide:  0 0 2px var(--core-white), 0 0 8px var(--sodium), 0 0 22px rgba(255, 154, 31, 0.45);
+  --glow-magenta-wide: 0 0 2px var(--core-white), 0 0 8px var(--neon-magenta), 0 0 22px rgba(255, 46, 136, 0.4);
+}
+
+/* ── Typography Utility Classes ────────────────────────────────────────── */
+.noir-label {
+  font-family: var(--font-noir-condensed);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.noir-serial {
+  font-family: var(--font-noir-mono);
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+/* ── Neon Sign Glint & Breathing Animations ────────────────────────────── */
+@keyframes neon-tube-breathe {
+  0%, 100% {
+    opacity: 0.96;
+    filter: drop-shadow(0 0 3px rgba(25, 240, 255, 0.65));
+  }
+  50% {
+    opacity: 1.0;
+    filter: drop-shadow(0 0 6px rgba(25, 240, 255, 0.95));
+  }
+}
+
+@keyframes neon-sign-dip {
+  0%, 94%, 96%, 100% {
+    opacity: 1;
+    text-shadow: 0 0 3px var(--core-white), 0 0 10px var(--neon-cyan), 0 0 25px rgba(25, 240, 255, 0.6);
+  }
+  95% {
+    opacity: 0.38;
+    text-shadow: 0 0 1px var(--neon-cyan);
+  }
+}
+
+@keyframes arc-flicker {
+  0%, 96%, 100% {
+    opacity: 0;
+  }
+  97% {
+    opacity: 0.9;
+  }
+  98% {
+    opacity: 0.2;
+  }
+  99% {
+    opacity: 1;
+  }
+}
+
+@keyframes slow-drip {
+  0% {
+    transform: translateY(0);
+    opacity: 0.8;
+  }
+  70% {
+    transform: translateY(12px);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(18px);
+    opacity: 0;
+  }
+}
+
+/* ── Halation & Atmospheric Film Grain ──────────────────────────────────── */
+.noir-halation {
+  position: relative;
+}
+.noir-halation::after {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(25, 240, 255, 0.08) 0%, transparent 70%);
+  mix-blend-mode: screen;
+}
+
+/* ── Wet Floor Reflection ──────────────────────────────────────────────── */
+.noir-wet-reflection {
+  transform: scaleY(-1);
+  opacity: 0.12;
+  filter: blur(1.5px);
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 80%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 80%);
+  pointer-events: none;
+}
+
+/* ── Greyscale Accessibility Mode ──────────────────────────────────────── */
+.noir-greyscale-mode {
+  filter: grayscale(100%) contrast(1.15) !important;
+}
+
+/* ── Reduce Motion Override ────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.noir-reduced-motion * {
+  animation: none !important;
+  transition: none !important;
+}

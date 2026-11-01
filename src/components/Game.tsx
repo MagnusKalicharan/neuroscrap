@@ -38,6 +38,9 @@ import { getShipFloorHeight } from "./ship/collision";
 import { shipAudio } from "../audio/shipAudio";
 // @ts-ignore
 import { ShipAudio, notifyFootstep, surfaceAt, playInteraction } from "../audio/ShipAudio";
+import Scene1 from "../scenes/scene1/Scene1";
+import CrashCinematic from "../scenes/scene1/crash/CrashCinematic";
+import Scene2, { Scene2Canvas } from "../scenes/scene2/Scene2";
 
 // ============================================================
 // TUNABLE GAMEPLAY CONSTANTS
@@ -693,8 +696,11 @@ let _scanFrameCount = 0;
 // Realistic Collision Deflection (Cannot cross stones or wreck),
 // Smooth 3D Terrain Height Following, Procedural Footsteps & Scanner
 // ============================================================
+export const playerInputLocked = { current: false };
+
 interface PlayerProps {
   isLocked: boolean;
+  inputLocked?: boolean;
   flashlight: boolean;
   setFlashlight: React.Dispatch<React.SetStateAction<boolean>>;
   triggerPing: () => void;
@@ -703,6 +709,7 @@ interface PlayerProps {
 
 function Player({
   isLocked,
+  inputLocked = false,
   flashlight,
   setFlashlight,
   triggerPing,
@@ -761,14 +768,18 @@ function Player({
       lastValidForward.current.copy(_forward);
     }
 
+    const isInputBlocked = inputLocked || playerInputLocked.current;
+
     _right.crossVectors(_forward, camera.up).normalize();
 
     _direction.set(0, 0, 0);
-    _direction.addScaledVector(_forward, (k.forward ? 1 : 0) - (k.backward ? 1 : 0));
-    _direction.addScaledVector(_right, (k.right ? 1 : 0) - (k.left ? 1 : 0));
+    if (!isInputBlocked) {
+      _direction.addScaledVector(_forward, (k.forward ? 1 : 0) - (k.backward ? 1 : 0));
+      _direction.addScaledVector(_right, (k.right ? 1 : 0) - (k.left ? 1 : 0));
 
-    if (_direction.lengthSq() > 0) {
-      _direction.normalize();
+      if (_direction.lengthSq() > 0) {
+        _direction.normalize();
+      }
     }
 
     const currentSpeed = k.sprint ? RUN_SPEED : WALK_SPEED;
@@ -2767,6 +2778,7 @@ function SpaceshipWreckScene({ pingTimestamp }: { pingTimestamp: number }) {
 // ============================================================
 interface GameEngineControlsProps {
   isLocked: boolean;
+  inputLocked?: boolean;
   setIsLocked: (locked: boolean) => void;
   flashlight: boolean;
   setFlashlight: React.Dispatch<React.SetStateAction<boolean>>;
@@ -2776,6 +2788,7 @@ interface GameEngineControlsProps {
 
 function GameEngineControls({
   isLocked,
+  inputLocked = false,
   setIsLocked,
   flashlight,
   setFlashlight,
@@ -2828,9 +2841,10 @@ function GameEngineControls({
 
   return (
     <>
-      <PointerLockControls ref={controlsRef} />
+      <PointerLockControls ref={controlsRef} enabled={!inputLocked} />
       <Player
         isLocked={isLocked}
+        inputLocked={inputLocked}
         flashlight={flashlight}
         setFlashlight={setFlashlight}
         triggerPing={triggerPing}
@@ -2903,7 +2917,28 @@ export default function Game() {
     description: string;
   } | null>(null);
 
+  const [scene1Complete, setScene1Complete] = useState(false);
+  const [scene2Complete, setScene2Complete] = useState(false);
+  const [scene2InputLocked, setScene2InputLocked] = useState(true);
+
+  // Direct scene testing support (?scene=2)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("scene") === "2") {
+        setScene1Complete(true);
+      }
+    }
+  }, []);
+  const [crashProgress, setCrashProgress] = useState<number | null>(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const cvs = canvasContainerRef.current?.querySelector("canvas");
+    if (cvs) canvasRef.current = cvs;
+  }, []);
 
   // Full-bleed raymarched general relativity black hole canvas
   const blackHoleCanvasRef = useFullscreenBlackHoleSky();
@@ -2969,6 +3004,7 @@ export default function Game() {
             <SpaceshipWreckScene pingTimestamp={pingTimestamp} />
             <GameEngineControls
               isLocked={isLocked}
+              inputLocked={scene1Complete && !scene2Complete && scene2InputLocked}
               setIsLocked={setIsLocked}
               flashlight={flashlight}
               setFlashlight={setFlashlight}
@@ -2976,12 +3012,21 @@ export default function Game() {
               setTargetInfo={setTargetInfo}
             />
             <ShipAudio playerPositionRef={sharedPlayerPos as any} />
+            {crashProgress !== null && (
+              <CrashCinematic
+                progress={crashProgress}
+                reduceMotion={reduceMotion}
+              />
+            )}
+            {scene1Complete && !scene2Complete && (
+              <Scene2Canvas reduceMotion={reduceMotion} />
+            )}
           </Suspense>
         </Canvas>
       </div>
 
       {/* ── Navigation / Return Button ─────────────────────────── */}
-      <div className="fixed top-6 left-6 z-40 flex items-center gap-4">
+      <div className="fixed top-6 right-6 z-40 flex items-center gap-4">
         <button
           onClick={() => router.push("/")}
           className="px-4 py-2 bg-black/70 hover:bg-black/90 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 font-mono text-xs tracking-widest uppercase rounded transition-all backdrop-blur-md cursor-pointer shadow-[0_0_15px_rgba(0,255,255,0.15)] flex items-center gap-2"
@@ -2990,8 +3035,36 @@ export default function Game() {
         </button>
       </div>
 
-      {/* ── Start / Click-to-Play Overlay ───────────────────────── */}
-      {!isLocked && (
+      {/* ── SCENE 1: Title, Play, and Boot Sequence ───────────── */}
+      {!scene1Complete && (
+        <Scene1
+          onSceneComplete={() => {
+            setScene1Complete(true);
+          }}
+          canvasRef={canvasRef}
+          canvasContainerRef={canvasContainerRef}
+          onCrashProgress={(p) => setCrashProgress(p)}
+        />
+      )}
+
+      {/* ── SCENE 2: Eyes Open and First Controls ─────────────── */}
+      {scene1Complete && !scene2Complete && (
+        <Scene2
+          onSceneComplete={() => {
+            setScene2Complete(true);
+            setScene2InputLocked(false);
+          }}
+          canvasWrapperRef={canvasContainerRef}
+          canvasRef={canvasRef}
+          isLocked={isLocked}
+          requestLock={requestGameLock}
+          reduceMotion={reduceMotion}
+          onSetInputLocked={(locked) => setScene2InputLocked(locked)}
+        />
+      )}
+
+      {/* ── Start / Click-to-Play Overlay (Only active after Scene 1 & 2 complete and if unlocked) ── */}
+      {scene1Complete && scene2Complete && !isLocked && (
         <div
           onClick={requestGameLock}
           className="fixed inset-0 z-30 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[2px] cursor-pointer"
@@ -3018,13 +3091,13 @@ export default function Game() {
         </div>
       )}
 
-      {/* ── Crosshair (Only visible when pointer-locked) ────────── */}
-      {isLocked && (
+      {/* ── Crosshair (Only visible after Scene 1 & 2 complete when pointer-locked) ────────── */}
+      {scene1Complete && scene2Complete && isLocked && (
         <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white/90 shadow-[0_0_8px_rgba(0,255,255,0.9)] pointer-events-none z-30" />
       )}
 
-      {/* ── Tactical AR Object Target Scanner HUD ──────────────── */}
-      {isLocked && targetInfo && (
+      {/* ── Tactical AR Object Target Scanner HUD (Only after Scene 1 & 2 complete) ──────────────── */}
+      {scene1Complete && scene2Complete && isLocked && targetInfo && (
         <div className="fixed top-6 right-6 z-30 max-w-sm p-3.5 bg-black/85 border border-cyan-400/50 rounded-lg backdrop-blur-md shadow-[0_0_25px_rgba(0,255,255,0.2)] font-mono text-xs pointer-events-none transition-all">
           <div className="flex items-center justify-between border-b border-cyan-500/30 pb-1.5 mb-2">
             <span className="text-cyan-400 font-bold tracking-wider flex items-center gap-1.5 text-[11px]">
@@ -3046,15 +3119,15 @@ export default function Game() {
         </div>
       )}
 
-      {/* ── Active Sonar Ping Banner ────────────────────────────── */}
-      {isLocked && isPingActive && (
+      {/* ── Active Sonar Ping Banner (Only after Scene 1 & 2 complete) ────────────────────────────── */}
+      {scene1Complete && scene2Complete && isLocked && isPingActive && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 px-4 py-1.5 bg-cyan-950/80 border border-cyan-400 text-cyan-300 font-mono text-xs tracking-widest rounded shadow-[0_0_20px_rgba(0,255,255,0.4)] pointer-events-none backdrop-blur-md animate-pulse">
           TERRAIN SONAR PING ACTIVE — MAPPING OBSTACLE COLLIDERS
         </div>
       )}
 
-      {/* ── Tactical Suit Equipment HUD (Bottom Bar) ───────────── */}
-      {isLocked && (
+      {/* ── Tactical Suit Equipment HUD (Bottom Bar: Only visible after Scene 1 & 2 complete) ───── */}
+      {scene1Complete && scene2Complete && isLocked && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-5 py-2 bg-black/80 border border-cyan-500/30 rounded-full font-mono text-xs backdrop-blur-md pointer-events-none shadow-[0_0_20px_rgba(0,255,255,0.15)]">
           <span
             className={`px-2 py-0.5 rounded text-[11px] font-bold ${

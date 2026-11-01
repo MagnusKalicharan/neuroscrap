@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { Share_Tech_Mono, Rajdhani } from "next/font/google";
+import { Share_Tech_Mono, Rajdhani, Chakra_Petch } from "next/font/google";
 import "./globals.css";
+import "@/styles/neonNoir.css";
 
 const mono = Share_Tech_Mono({
   weight: "400",
@@ -16,6 +17,14 @@ const rajdhani = Rajdhani({
   display: "swap",
 });
 
+const chakraPetch = Chakra_Petch({
+  weight: ["400", "500", "600", "700"],
+  subsets: ["latin"],
+  variable: "--font-condensed",
+  display: "swap",
+  fallback: ["Impact", "Trebuchet MS", "sans-serif"],
+});
+
 export const metadata: Metadata = {
   title: "NEURO SCRAP — Solve. Rebuild. Survive.",
   description:
@@ -28,7 +37,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${mono.variable} ${rajdhani.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${mono.variable} ${rajdhani.variable} ${chakraPetch.variable}`}
+      suppressHydrationWarning
+    >
       <body className="antialiased bg-[#050806] text-white overflow-hidden" suppressHydrationWarning>
         {children}
       </body>

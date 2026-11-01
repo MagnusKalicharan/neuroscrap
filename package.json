@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:ch1": "node src/learning/ch1/runTests.mjs"
+    "test": "node src/scenes/scene1/runTests.mjs",
+    "test:scene1": "node src/scenes/scene1/runTests.mjs",
+    "test:ch1": "node src/learning/ch1/runTests.mjs",
+    "test:cells": "node --experimental-strip-types src/data/powerCells.test.ts",
+    "test:tasks": "node --experimental-strip-types src/ui/tasks/taskStore.test.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

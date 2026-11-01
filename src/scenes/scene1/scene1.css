@@ -1,0 +1,145 @@
+/**
+ * Scene 1 Styling & Micro-Animations
+ *
+ * Designed for 100dvh full-screen responsiveness, high contrast (WCAG AA),
+ * hardware-accelerated transforms/opacities, and complete reduced-motion support.
+ */
+
+:root {
+  --scene1-cyan: #00f3ff;
+  --scene1-cyan-dim: #00a8b3;
+  --scene1-cyan-glow: rgba(0, 243, 255, 0.45);
+  --scene1-green: #00ffaa;
+  --scene1-amber: #ffb800;
+  --scene1-red: #ff3344;
+  --scene1-bg: #000000;
+  --scene1-font-mono: 'Rajdhani', 'Orbitron', 'Courier New', monospace;
+  --scene1-font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Container safety */
+.scene1-container {
+  min-height: 100dvh;
+  width: 100vw;
+  overflow: hidden;
+  position: absolute;
+  inset: 0;
+  background-color: transparent;
+  color: #ffffff;
+  font-family: var(--scene1-font-mono);
+}
+
+/* Visible accessibility focus ring */
+.scene1-focus-ring:focus-visible {
+  outline: 2px solid var(--scene1-cyan) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 12px var(--scene1-cyan-glow) !important;
+}
+
+/* Title Font & Shadow */
+.scene1-title {
+  font-family: 'Orbitron', 'Rajdhani', monospace, sans-serif;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 20px rgba(0, 243, 255, 0.8), 0 0 50px rgba(0, 243, 255, 0.3);
+}
+
+.scene1-subtitle {
+  text-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+}
+
+/* ── CUE EFFECTS ── */
+
+/* 1. Power 12% Flickers 3 Times */
+@keyframes scene1Flicker3x {
+  0%, 100% { opacity: 1; text-shadow: 0 0 8px rgba(255, 184, 0, 0.8); }
+  15% { opacity: 0.15; }
+  30% { opacity: 1; }
+  45% { opacity: 0.2; }
+  60% { opacity: 1; }
+  75% { opacity: 0.3; }
+  90% { opacity: 1; }
+}
+
+.scene1-flicker-3x {
+  display: inline-block;
+  animation: scene1Flicker3x 0.8s ease-in-out;
+}
+
+/* 2. Neural Core Amber Glow */
+@keyframes scene1AmberGlow {
+  0%, 100% {
+    text-shadow: 0 0 6px rgba(255, 184, 0, 0.6);
+  }
+  50% {
+    text-shadow: 0 0 18px rgba(255, 184, 0, 1), 0 0 30px rgba(255, 184, 0, 0.8);
+    color: #fff2cc;
+  }
+}
+
+.scene1-amber-glow {
+  display: inline-block;
+  animation: scene1AmberGlow 1.2s infinite ease-in-out;
+}
+
+/* 3. Vision DAMAGED Red Flicker Once */
+@keyframes scene1RedFlicker {
+  0% { opacity: 0; color: #ff3344; }
+  25% { opacity: 1; text-shadow: 0 0 16px rgba(255, 51, 68, 0.9); }
+  40% { opacity: 0.2; }
+  60% { opacity: 1; text-shadow: 0 0 20px rgba(255, 51, 68, 1); }
+  100% { opacity: 1; text-shadow: 0 0 10px rgba(255, 51, 68, 0.7); }
+}
+
+.scene1-red-flicker {
+  display: inline-block;
+  animation: scene1RedFlicker 0.6s ease-out forwards;
+}
+
+/* 4. Memory Corrupted Text Glitch */
+@keyframes scene1GlitchCut {
+  0%, 100% { transform: none; opacity: 1; }
+  20% { transform: skewX(-12deg); opacity: 0.8; }
+  40% { transform: skewX(10deg); opacity: 0.9; }
+  60% { transform: translateY(-2px); }
+  80% { transform: translateY(1px); }
+}
+
+.scene1-corrupt-text {
+  display: inline-block;
+  animation: scene1GlitchCut 0.4s ease-in-out 3;
+}
+
+/* 5. Signal Found Cyan Pulse */
+@keyframes scene1PulseCyan {
+  0%, 100% {
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.6);
+  }
+  50% {
+    text-shadow: 0 0 22px rgba(0, 243, 255, 1), 0 0 40px rgba(0, 243, 255, 0.8);
+    color: #ffffff;
+  }
+}
+
+.scene1-pulse-cyan {
+  display: inline-block;
+  animation: scene1PulseCyan 1.4s infinite ease-in-out;
+}
+
+/* ── PREFERS REDUCED MOTION ── */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .scene1-flicker-3x,
+  .scene1-amber-glow,
+  .scene1-red-flicker,
+  .scene1-corrupt-text,
+  .scene1-pulse-cyan {
+    animation: none !important;
+    text-shadow: none !important;
+  }
+}

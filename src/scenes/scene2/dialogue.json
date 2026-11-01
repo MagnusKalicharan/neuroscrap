@@ -1,0 +1,71 @@
+{
+  "wake": [
+    {
+      "id": "W1",
+      "pStart": 0.30,
+      "pEnd": 0.44,
+      "speaker": "ORACLE",
+      "text": "SCRAP? ... Signal weak. Can you hear me?",
+      "radio": true
+    },
+    {
+      "id": "W2",
+      "pStart": 0.45,
+      "pEnd": 0.59,
+      "speaker": "SCRAP",
+      "text": "...Yes. Everything is blurry.",
+      "radio": false
+    },
+    {
+      "id": "W3",
+      "pStart": 0.60,
+      "pEnd": 0.78,
+      "speaker": "ORACLE",
+      "text": "Vision is restoring. Stay calm.",
+      "radio": true
+    }
+  ],
+  "dialogue": [
+    {
+      "id": "D1",
+      "speaker": "ORACLE",
+      "text": "Welcome back, SCRAP. The airlock is safe. Please step outside.",
+      "radio": true
+    },
+    {
+      "id": "D2",
+      "speaker": "SCRAP",
+      "text": "Something is wrong. I... can't decide.",
+      "radio": false
+    },
+    {
+      "id": "D3",
+      "speaker": "ORACLE",
+      "text": "Your neural core is damaged. Reach the beacon and I will guide you.",
+      "radio": true
+    }
+  ],
+  "reactions": {
+    "lookComplete": {
+      "speaker": "ORACLE",
+      "text": "Good. Your eyes respond.",
+      "radio": true
+    },
+    "moveComplete": {
+      "speaker": "ORACLE",
+      "text": "Motors online.",
+      "radio": true
+    },
+    "arrived": {
+      "speaker": "ORACLE",
+      "text": "Sensors ahead. I will guide you.",
+      "radio": true
+    }
+  },
+  "nudges": {
+    "lookShort": "Try moving the mouse to look around.",
+    "moveShort": "Press W A S D to walk forward.",
+    "beaconShort": "Head toward the cyan beacon.",
+    "sprintHint": "Hold SHIFT to sprint."
+  }
+}
