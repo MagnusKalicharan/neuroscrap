@@ -184,7 +184,7 @@ export function SpaceshipWreck({
       />
 
       {/* ── 4. Motorized Bulkhead Sliding Doors ── */}
-      <BulkheadDoors />
+      <BulkheadDoors colliders={model.colliders} />
 
       {/* ── 5. Ship Gameplay Interactables & Lore Consoles ── */}
       <ShipInteractables

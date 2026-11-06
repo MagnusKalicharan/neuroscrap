@@ -34,6 +34,7 @@ import {
   PLAYER_SPAWN,
   SHIP_POSITION,
   MEZZANINE,
+  DOORS,
 } from "./layout";
 import { Aabb, resolveShipCollisions } from "./collision";
 
@@ -997,27 +998,29 @@ export function buildShipModel(): ShipModel {
       0x323c48
     );
 
-    // Glowing door frame jambs
-    box(
-      emissive,
-      0.14,
-      doorH + 0.2,
-      0.1,
-      { p: [-doorW * 0.5 - 0.07, doorH * 0.5, z + 0.22] },
-      0xffb23a,
-      [1, 1, 1],
-      0
-    );
-    box(
-      emissive,
-      0.14,
-      doorH + 0.2,
-      0.1,
-      { p: [doorW * 0.5 + 0.07, doorH * 0.5, z + 0.22] },
-      0xffb23a,
-      [1, 1, 1],
-      0
-    );
+    // Glowing door frame jambs on BOTH sides (+Z and -Z)
+    for (const sideZ of [z - 0.22, z + 0.22]) {
+      box(
+        emissive,
+        0.14,
+        doorH + 0.2,
+        0.1,
+        { p: [-doorW * 0.5 - 0.07, doorH * 0.5, sideZ] },
+        0xffb23a,
+        [1, 1, 1],
+        0
+      );
+      box(
+        emissive,
+        0.14,
+        doorH + 0.2,
+        0.1,
+        { p: [doorW * 0.5 + 0.07, doorH * 0.5, sideZ] },
+        0xffb23a,
+        [1, 1, 1],
+        0
+      );
+    }
 
     colliders.push({
       minX: -HULL_RADIUS,
@@ -1037,6 +1040,21 @@ export function buildShipModel(): ShipModel {
   makeBulkhead(-18, 3.0, 3.4); // Crew quarters bulkhead
   makeBulkhead(-4, 3.4, 3.6);  // Cargo bay bulkhead
   makeBulkhead(22, 2.8, 3.4);  // Engine room bulkhead
+
+  // Dynamic doorway colliders (passable when open, blocking when closed)
+  DOORS.forEach((d) => {
+    colliders.push({
+      id: d.id,
+      isDoor: true,
+      isOpen: d.open,
+      minX: d.rotY === 0 ? -d.width * 0.5 : d.x - 0.25,
+      maxX: d.rotY === 0 ? d.width * 0.5 : d.x + 0.25,
+      minZ: d.rotY === 0 ? d.z - 0.25 : d.z - d.width * 0.5,
+      maxZ: d.rotY === 0 ? d.z + 0.25 : d.z + d.width * 0.5,
+      minY: 0,
+      maxY: d.height,
+    });
+  });
 
   // ── 9. PROPS INTEGRATED INTO ARCHITECTURAL WALL BAYS ──────────────────
   // A) Recessed Wall Lockers (Nestled into wall alcoves at x = -9.2)

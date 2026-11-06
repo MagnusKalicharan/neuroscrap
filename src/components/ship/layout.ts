@@ -101,18 +101,13 @@ export interface DoorDef {
 
 export const DOORS: DoorDef[] = [
   // Corridor → Crew Quarters
-  { id: "door_crew",    x: 0,    z: -18, width: 2.6, height: 3.2, rotY: 0, open: true,  jammed: false, locked: false },
+  { id: "door_crew",    x: 0,    z: -18, width: 2.6, height: 3.2, rotY: 0, open: false, jammed: false, locked: false },
   // Crew → Cargo Bay
-  { id: "door_cargo",   x: 0,    z: -4,  width: 3.0, height: 3.4, rotY: 0, open: true,  jammed: false, locked: false },
+  { id: "door_cargo",   x: 0,    z: -4,  width: 3.0, height: 3.4, rotY: 0, open: false, jammed: false, locked: false },
   // Cargo → Engine
-  { id: "door_engine",  x: 0,    z: 22,  width: 2.6, height: 3.2, rotY: 0, open: false, jammed: true,  locked: false },
+  { id: "door_engine",  x: 0,    z: 22,  width: 2.6, height: 3.2, rotY: 0, open: false, jammed: false, locked: false },
   // Corridor → Bridge
-  { id: "door_bridge",  x: 0,    z: -30, width: 2.4, height: 3.0, rotY: 0, open: true,  jammed: false, locked: false },
-  // Side room doors
-  { id: "door_bunk_p",  x: -3,   z: -14, width: 2.4, height: 3.2, rotY: Math.PI / 2, open: true,  jammed: false, locked: false },
-  { id: "door_bunk_s",  x: 3,    z: -14, width: 2.4, height: 3.2, rotY: Math.PI / 2, open: false, jammed: false, locked: false },
-  { id: "door_mess",    x: -3,   z: -7.5, width: 2.4, height: 3.2, rotY: Math.PI / 2, open: true,  jammed: false, locked: false },
-  { id: "door_med",     x: 3,    z: -7.5, width: 2.4, height: 3.2, rotY: Math.PI / 2, open: false, jammed: false, locked: false },
+  { id: "door_bridge",  x: 0,    z: -30, width: 2.4, height: 3.0, rotY: 0, open: false, jammed: false, locked: false },
 ];
 
 // ─────────────────────── BREACH DATA ───────────────────────

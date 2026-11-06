@@ -134,6 +134,9 @@ export default function CrashCinematic({
         perspCamera.updateProjectionMatrix();
         savedCameraRef.current = null;
       }
+      // Guaranteed camera level stabilization: zero roll/tilt after cinematic
+      perspCamera.rotation.z = 0;
+      perspCamera.rotation.order = "YXZ";
 
       // 2. Restore all material colors
       savedMap.forEach((origColor, mat) => {

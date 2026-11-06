@@ -721,10 +721,28 @@ function Player({
   const spotLightRef = useRef<THREE.SpotLight>(null);
   const spotTargetRef = useRef<THREE.Object3D>(new THREE.Object3D());
 
-  // Spawn inside the crashed spaceship interior, looking toward the open roof breach
+  // Spawn inside the crashed spaceship interior, looking toward the open roof breach (or custom test camera)
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const cx = params.get("camX");
+      const cy = params.get("camY");
+      const cz = params.get("camZ");
+      if (cx !== null && cy !== null && cz !== null) {
+        camera.position.set(parseFloat(cx), parseFloat(cy), parseFloat(cz));
+        const lx = parseFloat(params.get("lookX") ?? "0");
+        const ly = parseFloat(params.get("lookY") ?? "1.5");
+        const lz = parseFloat(params.get("lookZ") ?? "22");
+        camera.lookAt(lx, ly, lz);
+        camera.rotation.order = "YXZ";
+        camera.rotation.z = 0;
+        return;
+      }
+    }
     camera.position.set(PLAYER_SPAWN[0], PLAYER_SPAWN[1], PLAYER_SPAWN[2]);
     camera.lookAt(0, 2.2, -18);
+    camera.rotation.order = "YXZ";
+    camera.rotation.z = 0;
   }, [camera]);
 
   // Zero velocity on pause/unlock
@@ -754,6 +772,14 @@ function Player({
   }, [isLocked, triggerPing, setFlashlight]);
 
   useFrame((_, delta) => {
+    // Strictly stabilize first-person camera: enforce zero roll (no tilted view)
+    if (camera.rotation.z !== 0) {
+      camera.rotation.z = 0;
+    }
+    if (camera.rotation.order !== "YXZ") {
+      camera.rotation.order = "YXZ";
+    }
+
     if (!isLocked) return;
 
     const k = keys.current;
@@ -2796,6 +2822,7 @@ function GameEngineControls({
   setTargetInfo,
 }: GameEngineControlsProps) {
   const controlsRef = useRef<any>(null);
+  const { camera } = useThree();
 
   useEffect(() => {
     const ctrl = controlsRef.current;
@@ -2803,9 +2830,15 @@ function GameEngineControls({
 
     const handleLock = () => {
       setIsLocked(true);
+      camera.rotation.order = "YXZ";
+      camera.rotation.z = 0;
       shipAudio.resume();
     };
-    const handleUnlock = () => setIsLocked(false);
+    const handleUnlock = () => {
+      setIsLocked(false);
+      camera.rotation.order = "YXZ";
+      camera.rotation.z = 0;
+    };
 
     // Suppress console error noise on browser pointer lock cooldown rejection
     const handlePointerLockError = (e: Event) => {
@@ -2925,8 +2958,15 @@ export default function Game() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
+      if (params.get("hud") === "0") {
+        setIsLocked(true);
+      }
       if (params.get("scene") === "2") {
         setScene1Complete(true);
+      } else if (params.get("scene") === "3") {
+        setScene1Complete(true);
+        setScene2Complete(true);
+        setScene2InputLocked(false);
       }
     }
   }, []);
