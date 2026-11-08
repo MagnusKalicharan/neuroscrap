@@ -33,6 +33,7 @@ import { SparkSystem } from "./sparks";
 import { BulkheadDoors } from "./doors";
 import { ShipInteractables, type LogEntry } from "./interactables";
 import { shipAudio } from "../../audio/shipAudio";
+import { CockpitComputers } from "../../stations/computers";
 
 export { PLAYER_SPAWN, SHIP_POSITION, resolveShipCollisions, CableSystem, BrokenCables, SparkSystem, getCablePositions };
 export type { Aabb, ShipModel };
@@ -48,14 +49,26 @@ export interface SpaceshipWreckProps {
   onReady?: (model: ShipModel) => void;
   /** Callback when player interacts with a terminal screen */
   onOpenLog?: (log: LogEntry | null) => void;
+  /** Callback when player interacts with the Crew Quarters Terminal */
+  onOpenCrewTerminal?: () => void;
+  /** Active interaction prompt callback for HUD */
+  onInteractionPrompt?: (prompt: string | null) => void;
+  /** Station camera docking player locomotion lock callback */
+  onInputLocked?: (locked: boolean) => void;
+  /** Whether to render the Cockpit Computers installation (defaults to true) */
+  includeCockpitComputers?: boolean;
 }
 
 export function SpaceshipWreck({
   reducedMotion = false,
   quality = "high",
+  includeCockpitComputers = true,
   playerPositionRef,
   onReady,
   onOpenLog,
+  onOpenCrewTerminal,
+  onInteractionPrompt,
+  onInputLocked,
 }: SpaceshipWreckProps) {
   const { camera } = useThree();
 
@@ -191,6 +204,9 @@ export function SpaceshipWreck({
         powerRestored={powerRestored}
         onRestorePower={() => setPowerRestored(true)}
         onOpenLog={onOpenLog}
+        onOpenCrewTerminal={onOpenCrewTerminal}
+        onInteractionPrompt={onInteractionPrompt}
+        onInputLocked={onInputLocked}
         reducedMotion={reducedMotion}
       />
 
@@ -202,6 +218,9 @@ export function SpaceshipWreck({
         distance={16}
         decay={2}
       />
+
+      {/* ── 7. The Three Cockpit Computers (Avionics Flight Deck) ── */}
+      {includeCockpitComputers && <CockpitComputers />}
     </group>
   );
 }

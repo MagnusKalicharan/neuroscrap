@@ -1,0 +1,1378 @@
+/* ==========================================================================
+   TRANSMISSION DIAGNOSTIC CONSOLE STYLES (diagnostic.css)
+   Neon Noir Industrial Sci-Fi Hardware & Phosphor CRT Screen
+   ========================================================================== */
+
+:root {
+  --diag-green: #2ee85c;
+  --diag-green-bright: #4bff7b;
+  --diag-green-dim: #178a38;
+  --diag-dark-bg: #040e06;
+  --diag-panel-bg: #07180c;
+  --diag-panel-inner: #030a05;
+  --diag-steel: #182430;
+  --diag-steel-dark: #0f171f;
+  --diag-steel-lit: #2e3e4e;
+  --diag-steel-edge: #43586d;
+  --diag-amber: #ff9a1f;
+  --diag-amber-bright: #ffbe4a;
+  --diag-amber-dim: #73430a;
+  --diag-red: #ff3333;
+  --diag-red-dim: #6e1414;
+  --diag-text: #c9d6e2;
+  --diag-text-dim: #6b8296;
+  --diag-font-mono: var(--font-mono, "Share Tech Mono", "Courier New", monospace);
+}
+
+/* ── Fullscreen Overlay Wrapper ───────────────────────── */
+.diag-overlay-wrapper {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(2, 6, 4, 0.96);
+  z-index: 1000;
+  overflow: hidden;
+  user-select: none;
+  font-family: var(--diag-font-mono);
+}
+
+/* ── 1280x720 Base Canvas ─────────────────────────────── */
+.diag-stage {
+  width: 1280px;
+  height: 720px;
+  min-width: 1280px;
+  min-height: 720px;
+  position: relative;
+  transform-origin: center center;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--diag-dark-bg);
+  border: 4px solid var(--diag-steel-lit);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px #000,
+    0 0 0 3px var(--diag-steel-dark),
+    0 24px 70px rgba(0, 0, 0, 0.9),
+    inset 0 0 80px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+}
+
+/* ── Heavy Industrial Outer Bezel & Corner Hex Bolts ─── */
+.diag-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 8px solid var(--diag-steel);
+  box-shadow: inset 0 0 0 2px var(--diag-steel-edge);
+  z-index: 30;
+}
+
+.diag-bolt {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: radial-gradient(circle, #5b7289 25%, #243342 70%, #0d151c 100%);
+  border: 1px solid #101820;
+  border-radius: 3px;
+  z-index: 35;
+  box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+.diag-bolt-tl { top: 12px; left: 12px; }
+.diag-bolt-tr { top: 12px; right: 12px; }
+.diag-bolt-bl { bottom: 12px; left: 12px; }
+.diag-bolt-br { bottom: 12px; right: 12px; }
+
+/* ── CRT Vignette & Subtle Scanlines ──────────────────── */
+.diag-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.16) 0px,
+    rgba(0, 0, 0, 0.16) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  z-index: 25;
+}
+
+.diag-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 50% 50%,
+    transparent 65%,
+    rgba(0, 10, 3, 0.65) 100%
+  );
+  z-index: 24;
+}
+
+/* ── Top Tabs (Data Intake | Transmission Diagnostic) ─── */
+.diag-tab-strip {
+  position: relative;
+  z-index: 28;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 24px 0 24px;
+  background-color: var(--diag-steel-dark);
+  border-bottom: 2px solid var(--diag-steel-lit);
+}
+
+.diag-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--diag-text-dim);
+  background-color: var(--diag-steel);
+  border: 1px solid var(--diag-steel-lit);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.diag-tab:hover:not(:disabled) {
+  color: var(--diag-text);
+  background-color: var(--diag-steel-lit);
+}
+
+.diag-tab.active {
+  color: #031005;
+  background-color: var(--diag-green);
+  border-color: var(--diag-green-bright);
+  box-shadow: 0 0 12px rgba(46, 232, 92, 0.4);
+}
+
+.diag-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── CRT Header Bar ───────────────────────────────────── */
+.diag-header {
+  position: relative;
+  z-index: 26;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 28px;
+  background-color: #0b2210;
+  border-bottom: 2px solid var(--diag-green-dim);
+}
+
+.diag-header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: var(--diag-green-bright);
+  text-shadow: 0 0 8px rgba(75, 255, 123, 0.5);
+}
+
+.diag-header-serial {
+  font-size: 13px;
+  letter-spacing: 0.15em;
+  padding: 2px 8px;
+  background-color: #040e06;
+  border: 1px solid var(--diag-green-dim);
+  color: var(--diag-green);
+  border-radius: 2px;
+}
+
+.diag-header-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  padding: 4px 12px;
+  border-radius: 4px;
+}
+
+.diag-header-status.damaged {
+  color: var(--diag-amber-bright);
+  background-color: rgba(255, 154, 31, 0.12);
+  border: 1px solid var(--diag-amber);
+}
+
+.diag-header-status.ready {
+  color: var(--diag-green-bright);
+  background-color: rgba(46, 232, 92, 0.12);
+  border: 1px solid var(--diag-green);
+}
+
+/* ── Main Content Area ────────────────────────────────── */
+.diag-main {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 28px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+/* ── Schematic Row ────────────────────────────────────── */
+.diag-schematic-row {
+  position: relative;
+  height: 128px;
+  background-color: var(--diag-panel-inner);
+  border: 2px solid #0f3518;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  overflow: hidden;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.9);
+}
+
+.diag-schematic-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.diag-schematic-overlay-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.diag-schematic-blocks {
+  position: relative;
+  z-index: 5;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── Node Block Styling ───────────────────────────────── */
+.diag-node-block {
+  width: 110px;
+  height: 94px;
+  background-color: #071c0c;
+  border: 2px solid var(--diag-green-dim);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px 8px;
+  position: relative;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.diag-node-block.source-block,
+.diag-node-block.antenna-block {
+  width: 100px;
+  background-color: #0a1824;
+  border-color: #2b5577;
+}
+
+.diag-node-block.mode-ignore {
+  opacity: 0.65;
+  background-color: #050f08;
+  border-color: #0f3818;
+}
+
+.diag-node-block.mode-patch {
+  border-color: var(--diag-amber);
+  background-color: #1a1205;
+}
+
+.diag-node-block.kind-surge {
+  border-color: var(--diag-red);
+}
+
+.diag-node-block.kind-missing {
+  border: 2px dashed #ffb833;
+  background-color: transparent;
+}
+
+.diag-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--diag-text);
+}
+
+.diag-node-value {
+  font-size: 21px;
+  font-weight: 800;
+  font-family: var(--diag-font-mono);
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.diag-node-value.healthy {
+  color: var(--diag-green-bright);
+  text-shadow: 0 0 6px rgba(75, 255, 123, 0.4);
+}
+
+.diag-node-value.surge {
+  color: var(--diag-red);
+  text-shadow: 0 0 6px rgba(255, 51, 51, 0.6);
+  animation: diagSurgePulse 1.2s ease-in-out infinite;
+}
+
+.diag-node-value.missing {
+  color: var(--diag-amber-bright);
+}
+
+.diag-node-value.patched {
+  color: var(--diag-amber-bright);
+  text-shadow: 0 0 6px rgba(255, 154, 31, 0.5);
+}
+
+.diag-node-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--diag-text-dim);
+}
+
+@keyframes diagSurgePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.42; }
+}
+
+/* ── Switch Row & 3-Way Switch ────────────────────────── */
+.diag-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  margin-top: -2px;
+}
+
+.diag-switch-spacer {
+  width: 100px; /* Aligns with Source and Antenna blocks */
+}
+
+.diag-switch-container {
+  width: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.diag-switch-label {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--diag-text);
+}
+
+.diag-switch-bay {
+  width: 108px;
+  height: 48px;
+  background-color: var(--diag-steel-dark);
+  border: 2px solid var(--diag-steel-lit);
+  border-radius: 6px;
+  padding: 2px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8);
+  cursor: pointer;
+}
+
+.diag-switch-bay:focus-visible {
+  outline: 2px solid var(--diag-green-bright);
+  outline-offset: 2px;
+}
+
+.diag-switch-detent {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  position: relative;
+  z-index: 2;
+  cursor: pointer;
+}
+
+.diag-detent-icon {
+  font-size: 12px;
+  color: var(--diag-text-dim);
+  transition: color 0.15s;
+}
+
+.diag-detent-word {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--diag-text-dim);
+  transition: color 0.15s;
+}
+
+.diag-switch-detent.active .diag-detent-icon,
+.diag-switch-detent.active .diag-detent-word {
+  color: #031005;
+}
+
+/* Sliding Toggle Handle / Knob */
+.diag-switch-knob {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 32px;
+  background: linear-gradient(180deg, #607992 0%, #2e4152 40%, #15222d 100%);
+  border: 1px solid #7c9bb8;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
+  transition: transform 0.16s cubic-bezier(0.2, 0.85, 0.4, 1.15);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.diag-switch-bay[data-pos="0"] .diag-switch-knob { transform: translateX(2px); background: linear-gradient(180deg, #5dfa87 0%, #178a38 100%); border-color: #8bffab; }
+.diag-switch-bay[data-pos="1"] .diag-switch-knob { transform: translateX(36px); background: linear-gradient(180deg, #6c889f 0%, #283745 100%); border-color: #92afc7; }
+.diag-switch-bay[data-pos="2"] .diag-switch-knob { transform: translateX(70px); background: linear-gradient(180deg, #ffc059 0%, #a35d07 100%); border-color: #ffda85; }
+
+.diag-switch-bay.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: #3b2810;
+}
+
+/* ── Transmission Packet Strip ────────────────────────── */
+.diag-packet-strip {
+  height: 38px;
+  background-color: #030a05;
+  border: 1px solid var(--term-outline-green, #168036);
+  border-radius: 4px;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  align-items: center;
+  justify-items: center;
+  padding: 0 4px;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.7);
+}
+
+.diag-packet-label {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: var(--diag-text);
+  white-space: nowrap;
+}
+
+.diag-packet-slots {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diag-packet-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 90px;
+}
+
+.diag-packet-slot-id {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--diag-text-dim);
+}
+
+.diag-packet-slot-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--diag-green-bright);
+  font-family: var(--diag-font-mono);
+}
+
+.diag-packet-slot-val.skipped {
+  color: #5d7062;
+  text-decoration: line-through;
+}
+
+.diag-packet-slot-val.patched {
+  color: var(--diag-amber-bright);
+}
+
+.diag-packet-slot-val.surge {
+  color: var(--diag-red);
+}
+
+/* ── Bottom Deck: Patch Panel + Result Bar + Test Lever ── */
+.diag-bottom-deck {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+  position: relative;
+}
+
+/* ── Patch Panel (slides up in 200ms) ─────────────────── */
+.diag-patch-panel-container {
+  width: 480px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--diag-steel-dark);
+  border: 2px solid var(--diag-amber);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+}
+
+.diag-patch-panel-container.hidden {
+  transform: translateY(120%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.diag-patch-header {
+  padding: 6px 14px;
+  background-color: rgba(255, 154, 31, 0.16);
+  border-bottom: 1px solid var(--diag-amber);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diag-patch-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--diag-amber-bright);
+}
+
+.diag-patch-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.diag-patch-tab-btn {
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--diag-text);
+  background-color: var(--diag-steel);
+  border: 1px solid var(--diag-steel-lit);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.diag-patch-tab-btn.active {
+  background-color: var(--diag-amber);
+  color: #000;
+  border-color: var(--diag-amber-bright);
+}
+
+.diag-patch-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 12px 16px;
+  background: radial-gradient(circle at 50% 50%, #0d1720 0%, #060b10 100%);
+}
+
+/* ── Rotary Dial ──────────────────────────────────────── */
+.diag-dial-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.diag-dial-plate {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #2a3c4e 0%, #15212c 60%, #080e14 100%);
+  border: 3px solid var(--diag-steel-lit);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.8),
+    inset 0 0 10px rgba(0, 0, 0, 0.9);
+  cursor: grab;
+}
+
+.diag-dial-plate:active {
+  cursor: grabbing;
+}
+
+.diag-dial-plate:focus-visible {
+  outline: 2px solid var(--diag-amber-bright);
+  outline-offset: 4px;
+}
+
+.diag-dial-knob {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #44596d 0%, #1a2733 70%, #0d161f 100%);
+  border: 2px solid #57718a;
+  position: relative;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.7);
+  transition: transform 0.08s ease-out;
+}
+
+.diag-dial-needle {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 4px;
+  height: 24px;
+  margin-left: -2px;
+  background-color: var(--diag-amber-bright);
+  border-radius: 2px;
+  box-shadow: 0 0 6px rgba(255, 154, 31, 0.8);
+}
+
+.diag-dial-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.diag-digital-display {
+  padding: 4px 14px;
+  background-color: #030805;
+  border: 2px solid var(--diag-green-dim);
+  border-radius: 4px;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--diag-green-bright);
+  font-family: var(--diag-font-mono);
+  text-shadow: 0 0 8px rgba(75, 255, 123, 0.6);
+  min-width: 110px;
+  text-align: center;
+}
+
+.diag-digital-display.over-range {
+  color: var(--diag-red);
+  border-color: var(--diag-red);
+  text-shadow: 0 0 8px rgba(255, 51, 51, 0.7);
+}
+
+.diag-over-range-badge {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--diag-red);
+  letter-spacing: 0.12em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.diag-dial-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.diag-autofill-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #051408;
+  background-color: var(--diag-green);
+  border: 1px solid var(--diag-green-bright);
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(46, 232, 92, 0.35);
+  transition: all 0.15s ease;
+}
+
+.diag-autofill-btn:hover {
+  background-color: var(--diag-green-bright);
+  box-shadow: 0 0 14px rgba(75, 255, 123, 0.6);
+  transform: translateY(-1px);
+}
+
+.diag-autofill-btn:active {
+  transform: translateY(1px);
+}
+
+.diag-autofill-hint {
+  font-size: 12px;
+  color: var(--diag-amber-bright);
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 160px;
+  text-align: center;
+}
+
+/* ── Result Bar ───────────────────────────────────────── */
+.diag-result-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px 20px;
+  background-color: var(--diag-panel-bg);
+  border: 2px solid var(--diag-green-dim);
+  border-radius: 6px;
+  gap: 6px;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+}
+
+.diag-result-status-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.diag-result-status-line.ready {
+  color: var(--diag-text);
+}
+
+.diag-result-status-line.pass {
+  color: var(--diag-green-bright);
+  text-shadow: 0 0 10px rgba(75, 255, 123, 0.6);
+}
+
+.diag-result-status-line.fail {
+  color: var(--diag-red);
+  text-shadow: 0 0 10px rgba(255, 51, 51, 0.6);
+}
+
+.diag-result-reason {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--diag-text);
+}
+
+.diag-result-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.diag-warning-line {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--diag-amber-bright);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.06em;
+}
+
+.diag-continue-btn {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 6px 18px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #020c05;
+  background-color: var(--diag-green-bright);
+  border: 2px solid #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 0 16px rgba(75, 255, 123, 0.6);
+  transition: all 0.15s ease;
+}
+
+.diag-continue-btn:hover {
+  transform: scale(1.04);
+}
+
+/* ── Hardware Test Lever ──────────────────────────────── */
+.diag-lever-container {
+  width: 240px;
+  height: 100%;
+  background-color: var(--diag-steel-dark);
+  border: 3px solid var(--diag-steel-lit);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.7),
+    inset 0 0 12px rgba(0, 0, 0, 0.85);
+  position: relative;
+}
+
+.diag-lever-header {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: var(--diag-text);
+  text-align: center;
+}
+
+.diag-lever-status-lamp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  padding: 2px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--diag-steel-edge);
+  color: var(--diag-text-dim);
+}
+
+.diag-lever-status-lamp.standby {
+  color: var(--diag-green);
+  border-color: var(--diag-green-dim);
+  background-color: rgba(46, 232, 92, 0.1);
+}
+
+.diag-lever-status-lamp.testing {
+  color: var(--diag-amber-bright);
+  border-color: var(--diag-amber);
+  background-color: rgba(255, 154, 31, 0.2);
+  box-shadow: 0 0 8px rgba(255, 154, 31, 0.5);
+}
+
+.diag-lever-socket {
+  width: 74px;
+  height: 110px;
+  background-color: #06090d;
+  border: 2px solid #202b36;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.95);
+  cursor: grab;
+}
+
+.diag-lever-socket:active {
+  cursor: grabbing;
+}
+
+.diag-lever-socket:focus-visible {
+  outline: 2px solid var(--diag-green-bright);
+  outline-offset: 2px;
+}
+
+/* Diagonal Hazard Stripes on Lever Face */
+.diag-lever-hazard {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: repeating-linear-gradient(
+    -45deg,
+    #ffaa00 0px,
+    #ffaa00 8px,
+    #111 8px,
+    #111 16px
+  );
+}
+
+.diag-lever-arm {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 22px;
+  height: 60px;
+  margin-left: -11px;
+  background: linear-gradient(90deg, #536b80 0%, #2b3a47 60%, #151e26 100%);
+  border: 1px solid #738f9f;
+  border-radius: 4px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.8);
+  transition: transform 0.08s ease-out;
+}
+
+.diag-lever-handle {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  width: 44px;
+  height: 22px;
+  margin-left: -22px;
+  background: linear-gradient(180deg, #e05b38 0%, #992812 70%, #521004 100%);
+  border: 2px solid #ff7b5a;
+  border-radius: 4px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.9);
+}
+
+.diag-lever-btn {
+  padding: 4px 16px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--diag-text);
+  background-color: var(--diag-steel);
+  border: 1px solid var(--diag-steel-lit);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.diag-lever-btn:hover:not(:disabled) {
+  background-color: var(--diag-steel-lit);
+  color: #fff;
+}
+
+.diag-lever-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Footer ───────────────────────────────────────────── */
+.diag-footer {
+  position: relative;
+  z-index: 26;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 28px;
+  background-color: var(--diag-steel-dark);
+  border-top: 2px solid var(--diag-steel-lit);
+  font-size: 13px;
+  color: var(--diag-text-dim);
+}
+
+.diag-footer-hints {
+  letter-spacing: 0.1em;
+}
+
+.diag-footer-close-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--diag-text);
+  background-color: var(--diag-steel);
+  border: 1px solid var(--diag-steel-lit);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.diag-footer-close-btn:hover {
+  background-color: var(--diag-steel-lit);
+  color: #fff;
+}
+
+/* ── Small Viewport Warning (< 1024x600) ──────────────── */
+.diag-enlarge-warning {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background-color: #020803;
+  z-index: 2000;
+  padding: 24px;
+}
+
+@media (max-width: 1023px), (max-height: 599px) {
+  .diag-enlarge-warning {
+    display: flex;
+  }
+}
+
+.diag-warning-box {
+  max-width: 480px;
+  background-color: var(--diag-panel-bg);
+  border: 3px solid var(--diag-amber);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--diag-text);
+}
+
+/* ── Greyscale Mode (Accessible High Contrast) ───────── */
+[data-greyscale="true"] .diag-stage {
+  filter: grayscale(100%) contrast(120%);
+}
+
+[data-greyscale="true"] .diag-node-block.mode-patch {
+  border-style: double;
+}
+
+[data-greyscale="true"] .diag-node-block.kind-missing {
+  border-style: dashed;
+}
+
+/* ── Reduce Motion Mode ───────────────────────────────── */
+[data-reduce-motion="true"] .diag-switch-knob,
+[data-reduce-motion="true"] .diag-dial-knob,
+[data-reduce-motion="true"] .diag-lever-arm,
+[data-reduce-motion="true"] .diag-patch-panel-container {
+  transition: none !important;
+}
+
+[data-reduce-motion="true"] .diag-node-value.surge {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diag-switch-knob,
+  .diag-dial-knob,
+  .diag-lever-arm,
+  .diag-patch-panel-container {
+    transition: none !important;
+  }
+  .diag-node-value.surge {
+    animation: none !important;
+  }
+}
+
+/* ── Terminal Embedded Layout (.diag-terminal-container) ── */
+.diag-terminal-container {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  color: var(--diag-text);
+  font-family: var(--diag-font-mono);
+  user-select: none;
+}
+
+.diag-terminal-container .diag-schematic-row {
+  height: 90px;
+  padding: 0;
+  background-color: #040e06;
+  border: 1px solid var(--term-outline-green, #168036);
+  border-radius: 4px;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.85);
+  position: relative;
+  overflow: hidden;
+}
+
+.diag-schematic-grid {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-items: center;
+}
+
+.diag-terminal-container .diag-node-block {
+  position: relative;
+  width: 84px;
+  height: 76px;
+  padding: 3px 5px;
+  border-width: 1.5px;
+  border-radius: 4px;
+  background-color: #06150a;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.diag-terminal-container .diag-node-block.source-block,
+.diag-terminal-container .diag-node-block.antenna-block {
+  width: 76px;
+}
+
+.diag-terminal-container .diag-node-header {
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.diag-terminal-container .diag-node-value {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-align: center;
+  line-height: 1.1;
+  padding: 2px 0;
+}
+
+.diag-terminal-container .diag-node-footer {
+  font-size: 9px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.diag-switch-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  width: 100%;
+  align-items: center;
+  justify-items: center;
+  margin-top: -1px;
+}
+
+.diag-grid-spacer {
+  width: 100%;
+}
+
+.diag-terminal-container .diag-switch-container {
+  width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.diag-terminal-container .diag-switch-label {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.diag-terminal-container .diag-switch-bay {
+  width: 76px;
+  height: 25px;
+  padding: 2px;
+}
+
+.diag-terminal-container .diag-switch-knob {
+  width: 22px;
+  height: 19px;
+}
+
+.diag-terminal-container .diag-switch-bay[data-pos="0"] .diag-switch-knob {
+  transform: translateX(2px);
+}
+
+.diag-terminal-container .diag-switch-bay[data-pos="1"] .diag-switch-knob {
+  transform: translateX(26px);
+}
+
+.diag-terminal-container .diag-switch-bay[data-pos="2"] .diag-switch-knob {
+  transform: translateX(50px);
+}
+
+.diag-terminal-container .diag-switch-detent {
+  font-size: 10px;
+}
+
+.diag-terminal-container .diag-detent-word {
+  display: none;
+}
+
+.diag-terminal-container .diag-detent-icon {
+  font-size: 11px;
+}
+
+.diag-terminal-container .diag-packet-strip {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  width: 100%;
+  height: 38px;
+  align-items: center;
+  justify-items: center;
+  background-color: #030a05;
+  border: 1px solid var(--term-outline-green, #168036);
+  border-radius: 4px;
+}
+
+.diag-terminal-container .diag-packet-label {
+  font-size: 10px;
+}
+
+.diag-terminal-container .diag-bottom-deck {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+  max-height: 255px;
+}
+
+.diag-terminal-container .diag-patch-panel-container {
+  flex: 1.25;
+  max-width: 380px;
+  border: 1px solid var(--diag-amber);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  background-color: #06110a;
+  overflow: hidden;
+}
+
+.diag-terminal-container .diag-patch-panel-container.hidden {
+  transform: none !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.diag-terminal-container .diag-patch-header {
+  padding: 3px 8px;
+}
+
+.diag-terminal-container .diag-patch-title {
+  font-size: 11px;
+}
+
+.diag-terminal-container .diag-patch-tab-btn {
+  padding: 1px 6px;
+  font-size: 10px;
+}
+
+.diag-terminal-container .diag-patch-body {
+  padding: 6px 8px;
+  gap: 8px;
+}
+
+.diag-terminal-container .diag-dial-control {
+  gap: 4px;
+}
+
+.diag-terminal-container .diag-dial-plate {
+  width: 96px;
+  height: 96px;
+  border-width: 2px;
+}
+
+.diag-terminal-container .diag-dial-knob {
+  width: 62px;
+  height: 62px;
+}
+
+.diag-terminal-container .diag-dial-needle {
+  height: 20px;
+}
+
+.diag-terminal-container .diag-dial-value-box {
+  padding: 2px 8px;
+}
+
+.diag-terminal-container .diag-dial-display-num {
+  font-size: 18px;
+}
+
+.diag-terminal-container .diag-autofill-btn {
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+.diag-terminal-container .diag-trap-warning {
+  font-size: 9px;
+  padding: 3px 6px;
+}
+
+.diag-terminal-container .diag-result-container {
+  flex: 1;
+  border: 1px solid var(--term-outline-green, #168036);
+  border-radius: 4px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background-color: #040e06;
+}
+
+.diag-terminal-container .diag-result-status-line {
+  font-size: 13px;
+}
+
+.diag-terminal-container .diag-result-reason {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.diag-terminal-container .diag-result-continue-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.diag-terminal-container .diag-test-lever-container {
+  width: 140px;
+  border: 1px solid var(--term-outline-green, #168036);
+  border-radius: 4px;
+  padding: 6px;
+  background-color: #040e06;
+}
+
+.diag-terminal-container .diag-lever-header {
+  font-size: 10px;
+}
+
+.diag-terminal-container .diag-lever-socket {
+  height: 110px;
+  padding: 8px;
+}
+
+.diag-terminal-container .diag-lever-track {
+  height: 100px;
+}
+
+.diag-terminal-container .diag-lever-arm {
+  width: 18px;
+  height: 48px;
+}
+
+.diag-terminal-container .diag-lever-knob {
+  width: 44px;
+  height: 26px;
+}
+
+.diag-terminal-container .diag-lever-hint {
+  font-size: 9px;
+}
+

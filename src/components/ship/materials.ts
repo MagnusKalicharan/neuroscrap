@@ -165,49 +165,60 @@ export function getScreenTexture(): THREE.CanvasTexture {
     return new THREE.CanvasTexture(null as unknown as HTMLCanvasElement);
 
   const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 256;
+  canvas.width = 1024;
+  canvas.height = 512;
   const ctx = canvas.getContext("2d")!;
 
   ctx.fillStyle = "#060d12";
-  ctx.fillRect(0, 0, 512, 256);
+  ctx.fillRect(0, 0, 1024, 512);
+
+  // Soft background vignette
+  const grad = ctx.createRadialGradient(512, 256, 100, 512, 256, 560);
+  grad.addColorStop(0, "rgba(0, 180, 220, 0.08)");
+  grad.addColorStop(1, "rgba(0, 0, 0, 0.85)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1024, 512);
 
   // Horizontal scanlines
-  ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
-  for (let y = 0; y < 256; y += 3) {
-    ctx.fillRect(0, y, 512, 1);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+  for (let y = 0; y < 512; y += 4) {
+    ctx.fillRect(0, y, 1024, 2);
   }
 
   // Cyan terminal header
   ctx.fillStyle = "#00ffff";
-  ctx.font = "bold 18px monospace";
-  ctx.fillText("USSC ANOMALY // SYS.DIAGNOSTICS", 20, 35);
+  ctx.font = "bold 32px monospace";
+  ctx.fillText("USSC ANOMALY // SYS.DIAGNOSTICS", 40, 68);
   ctx.strokeStyle = "#00ffff";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(20, 45);
-  ctx.lineTo(492, 45);
+  ctx.moveTo(40, 88);
+  ctx.lineTo(984, 88);
   ctx.stroke();
 
   // Status text lines
-  ctx.font = "14px monospace";
+  ctx.font = "26px monospace";
   ctx.fillStyle = "#38ef7d";
-  ctx.fillText("> CRITICAL FAILURE: HULL COMPROMISED", 20, 75);
-  ctx.fillText("> LIFE SUPPORT: OFFLINE [BREACH DETECTED]", 20, 100);
-  ctx.fillText("> AUX REACTOR: 12% REMAINING - SHUTDOWN PENDING", 20, 125);
-  ctx.fillText("> EGRESS STATUS: PORT HULL BREACH ACCESSIBLE", 20, 150);
+  ctx.fillText("> CRITICAL FAILURE: HULL COMPROMISED", 40, 148);
+  ctx.fillText("> LIFE SUPPORT: OFFLINE [BREACH DETECTED]", 40, 198);
+  ctx.fillText("> AUX REACTOR: 12% REMAINING - SHUTDOWN PENDING", 40, 248);
+  ctx.fillText("> EGRESS STATUS: PORT HULL BREACH ACCESSIBLE", 40, 298);
 
   // Amber warning box
-  ctx.fillStyle = "rgba(255, 170, 0, 0.18)";
-  ctx.fillRect(20, 170, 472, 60);
+  ctx.fillStyle = "rgba(255, 170, 0, 0.15)";
+  ctx.fillRect(40, 340, 944, 110);
   ctx.strokeStyle = "#ffaa00";
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(20, 170, 472, 60);
+  ctx.lineWidth = 3;
+  ctx.strokeRect(40, 340, 944, 110);
   ctx.fillStyle = "#ffaa00";
-  ctx.font = "bold 15px monospace";
-  ctx.fillText("! MANUAL OVERRIDE REQUIRED AT ENGINE CORE LEVER !", 30, 205);
+  ctx.font = "bold 28px monospace";
+  ctx.fillText("! MANUAL OVERRIDE REQUIRED AT ENGINE CORE LEVER !", 64, 405);
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
   _screenTex = tex;
   return tex;
 }

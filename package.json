@@ -11,7 +11,10 @@
     "test:scene1": "node src/scenes/scene1/runTests.mjs",
     "test:ch1": "node src/learning/ch1/runTests.mjs",
     "test:cells": "node --experimental-strip-types src/data/powerCells.test.ts",
-    "test:tasks": "node --experimental-strip-types src/ui/tasks/taskStore.test.ts"
+    "test:tasks": "node --experimental-strip-types src/ui/tasks/taskStore.test.ts",
+    "test:telemetry": "node --experimental-strip-types src/components/telemetry/telemetryStore.test.ts",
+    "test:relay": "node --experimental-strip-types src/section2/evaluateConfig.test.ts",
+    "test:diagnostic": "node --experimental-strip-types src/section2/diagnostic/diagnostic.test.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

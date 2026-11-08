@@ -340,7 +340,11 @@ function scorch(
 
 // ═════════════════════════════ GENERATOR ═══════════════════════════════
 
-export function buildShipModel(): ShipModel {
+export function buildShipModel({
+  includeCockpitPlaceholders = false,
+}: {
+  includeCockpitPlaceholders?: boolean;
+} = {}): ShipModel {
   const rng = mulberry32(2024);
   const interior = new Bucket();
   const exterior = new Bucket();
@@ -685,6 +689,8 @@ export function buildShipModel(): ShipModel {
   // Dashed neon cyan floor guide strips (continuous through doorway and bridge)
   for (const x of [-1.8, 1.8]) {
     for (let z = -48; z <= 38; z += 2.5) {
+      // Hide floor guide strip over the severed Section 2 R4 relay line gap (z in [3.5, 6.0])
+      if (x === 1.8 && z >= 3.5 && z <= 6.0) continue;
       box(
         emissive,
         0.14,
@@ -1088,42 +1094,44 @@ export function buildShipModel(): ShipModel {
   box(interior, 3.2, 0.45, 0.6, { p: [-6.8, 0.225, -8.6] }, 0x3d4550);
   colliders.push({ minX: -8.6, maxX: -5.0, minZ: -12.0, maxZ: -8.0 });
 
-  // C) Bridge Avionics Consoles & Pilot Chairs
-  [-4.2, 0, 4.2].forEach((x, i) => {
-    const ry = -Math.sign(x || 1) * 0.32 * (i === 1 ? 0 : 1);
-    solid(interior, 3.4, 1.05, 1.3, [x, 0.55, -42], ry, 0x2e3642);
+  // C) Bridge Avionics Consoles & Pilot Chairs (Replaced by modern Three Cockpit Computers)
+  if (includeCockpitPlaceholders) {
+    [-4.2, 0, 4.2].forEach((x, i) => {
+      const ry = -Math.sign(x || 1) * 0.32 * (i === 1 ? 0 : 1);
+      solid(interior, 3.4, 1.05, 1.3, [x, 0.55, -42], ry, 0x2e3642);
 
-    // CRT Displays
-    const scr = new THREE.BoxGeometry(2.6, 0.04, 0.9);
-    place(scr, { p: [x, 1.25, -42.2], r: [-0.68, ry, 0] });
-    (i === 1 ? flicker : emissive).add(
-      paint(scr, i === 1 ? 0x2288aa : 0x00f0ff, 0)
-    );
+      // CRT Displays
+      const scr = new THREE.BoxGeometry(2.6, 0.04, 0.9);
+      place(scr, { p: [x, 1.25, -42.2], r: [-0.68, ry, 0] });
+      (i === 1 ? flicker : emissive).add(
+        paint(scr, i === 1 ? 0x2288aa : 0x00f0ff, 0)
+      );
 
-    // Pilot seats
-    box(
-      interior,
-      1.1,
-      0.45,
-      1.1,
-      { p: [x, 0.45, -39], r: [0, ry, 0] },
-      0x4a3f3a
-    );
-    box(
-      interior,
-      1.1,
-      1.4,
-      0.22,
-      { p: [x, 1.25, -38.5], r: [-0.15, ry, 0] },
-      0x4a3f3a
-    );
-    colliders.push({
-      minX: x - 0.6,
-      maxX: x + 0.6,
-      minZ: -39.6,
-      maxZ: -38.4,
+      // Pilot seats
+      box(
+        interior,
+        1.1,
+        0.45,
+        1.1,
+        { p: [x, 0.45, -39], r: [0, ry, 0] },
+        0x4a3f3a
+      );
+      box(
+        interior,
+        1.1,
+        1.4,
+        0.22,
+        { p: [x, 1.25, -38.5], r: [-0.15, ry, 0] },
+        0x4a3f3a
+      );
+      colliders.push({
+        minX: x - 0.6,
+        maxX: x + 0.6,
+        minZ: -39.6,
+        maxZ: -38.4,
+      });
     });
-  });
+  }
 
   // D) Cargo Bay Shipping Containers & Heavy Crates
   solid(interior, 3.2, 2.4, 5.0, [-4.5, 1.2, 14], 0.05, 0x9a4e28); // rust orange
@@ -1150,15 +1158,6 @@ export function buildShipModel(): ShipModel {
   solid(interior, 2.4, 1.8, 3.2, [-4.5, 0.9, 19], 0.42, 0x606874);
 
   // Fallen industrial beams & debris (tucked safely along sides)
-  box(
-    structural,
-    0.45,
-    0.45,
-    9.0,
-    { p: [-1.8, 1.8, -3.5], r: [0.12, 0.52, 0.16] },
-    0x647080,
-    [1, 1, 6]
-  );
   box(
     structural,
     0.4,

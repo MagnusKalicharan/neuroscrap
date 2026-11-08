@@ -13,6 +13,7 @@ import { MoveTracker, MoveStepOverlay } from "./MoveStep";
 import Beacon from "./Beacon";
 import EdgeIndicator from "./EdgeIndicator";
 import { scene2Sound } from "./sound";
+import { shipAudio } from "../../audio/shipAudio";
 
 export type Scene2State =
   | "waiting"
@@ -256,6 +257,45 @@ export default function Scene2({
     }
   }, [state, isLocked]);
 
+  const handleRequestLock = useCallback(() => {
+    scene2Sound.initAndResume();
+    shipAudio?.resume?.();
+    if (requestLock) {
+      requestLock();
+    }
+    const cvs = canvasRef?.current || canvasWrapperRef?.current?.querySelector("canvas");
+    if (cvs && typeof cvs.requestPointerLock === "function") {
+      try {
+        const p = cvs.requestPointerLock() as any;
+        if (p && typeof p.catch === "function") {
+          p.catch(() => {
+            setTimeout(() => {
+              if (!document.pointerLockElement) {
+                try {
+                  const p2 = cvs.requestPointerLock() as any;
+                  if (p2 && typeof p2.catch === "function") p2.catch(() => {});
+                } catch {}
+              }
+            }, 1250);
+          });
+        }
+      } catch {}
+    }
+  }, [requestLock, canvasRef, canvasWrapperRef]);
+
+  // Keyboard support for Enter/Space to take control
+  useEffect(() => {
+    if (!showLockPrompt) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.code === "Enter" || e.code === "Space" || e.key === " ") {
+        e.preventDefault();
+        handleRequestLock();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showLockPrompt, handleRequestLock]);
+
   // Idle Timer & Nudges during learning states
   useEffect(() => {
     if (state !== "learnLook" && state !== "learnMove" && state !== "goToBeacon") return;
@@ -307,9 +347,17 @@ export default function Scene2({
       scene2Bridge.wakeProgress = 1.0;
       goTo("dialogue");
     } else {
+      if (!hasCompletedFiredRef.current) {
+        hasCompletedFiredRef.current = true;
+        const [bx, by, bz] = SCENE2_CONFIG.beaconPos;
+        onSceneComplete("scene2", {
+          playerPos: [bx, by + 1.5, bz],
+          yaw: 0,
+        });
+      }
       goTo("done");
     }
-  }, [state, goTo]);
+  }, [state, goTo, onSceneComplete]);
 
   // Look complete handler
   const handleLookComplete = useCallback(() => {
@@ -448,8 +496,8 @@ export default function Scene2({
         />
       )}
 
-      {/* ── 3. GUIDANCE COACH & OBJECTIVE BAR ── */}
-      {(state === "learnLook" || state === "learnMove" || state === "goToBeacon") && (
+      {/* ── 3. GUIDANCE COACH & OBJECTIVE BAR (Hidden during lock modal to prevent overlap) ── */}
+      {!showLockPrompt && (state === "learnLook" || state === "learnMove" || state === "goToBeacon") && (
         <GuidanceCoach
           currentStepIndex={state === "learnLook" ? 0 : state === "learnMove" ? 1 : 2}
           objectiveText={
@@ -469,13 +517,13 @@ export default function Scene2({
         />
       )}
 
-      {/* ── 4. LOOK STEP OVERLAY ── */}
-      {state === "learnLook" && (
+      {/* ── 4. LOOK STEP OVERLAY (Hidden during reaction speech & lock modal to prevent overlap) ── */}
+      {!showLockPrompt && state === "learnLook" && !reactionLine && (
         <LookStepOverlay progressPercent={lookProgressPercent} />
       )}
 
-      {/* ── 5. MOVE STEP OVERLAY ── */}
-      {state === "learnMove" && (
+      {/* ── 5. MOVE STEP OVERLAY (Hidden during reaction speech & lock modal to prevent overlap) ── */}
+      {!showLockPrompt && state === "learnMove" && !reactionLine && (
         <MoveStepOverlay progressPercent={moveProgressPercent} highlightW={highlightW} />
       )}
 
@@ -491,16 +539,26 @@ export default function Scene2({
       {/* ── 7. POINTER LOCK PROMPT (If unlocked during controls) ── */}
       {showLockPrompt && (
         <div
-          onClick={() => requestLock?.()}
+          onClick={handleRequestLock}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm cursor-pointer select-none"
         >
-          <div className="bg-black/90 border border-cyan-400 p-6 rounded-xl text-center max-w-sm shadow-[0_0_30px_rgba(0,255,255,0.3)] animate-pulse">
+          <div className="bg-black/90 border border-cyan-400 p-6 rounded-xl text-center max-w-sm shadow-[0_0_30px_rgba(0,255,255,0.3)] animate-pulse relative">
             <h3 className="font-mono text-xl font-black text-cyan-300 tracking-wider mb-2">
               CLICK TO TAKE CONTROL
             </h3>
-            <p className="font-mono text-xs text-cyan-200/80">
+            <p className="font-mono text-xs text-cyan-200/80 mb-4">
               Click anywhere or press Enter to resume tutorial.
             </p>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSkip();
+              }}
+              className="px-3 py-1 bg-neutral-900 hover:bg-neutral-800 border border-cyan-500/50 hover:border-cyan-400 text-cyan-300 text-xs font-mono uppercase tracking-widest rounded transition-all cursor-pointer"
+            >
+              Skip Tutorial ▸
+            </button>
           </div>
         </div>
       )}
@@ -509,7 +567,7 @@ export default function Scene2({
       {state !== "arrived" && (
         <button
           onClick={handleSkip}
-          className="fixed bottom-6 right-6 z-40 font-mono text-xs text-cyan-400/80 hover:text-cyan-200 bg-black/70 hover:bg-black/90 border border-cyan-500/40 hover:border-cyan-400 px-3 py-1.5 rounded uppercase tracking-widest backdrop-blur-sm transition-all shadow-[0_0_15px_rgba(0,255,255,0.1)] cursor-pointer"
+          className="fixed bottom-6 right-6 z-[60] font-mono text-xs text-cyan-400/80 hover:text-cyan-200 bg-black/70 hover:bg-black/90 border border-cyan-500/40 hover:border-cyan-400 px-3 py-1.5 rounded uppercase tracking-widest backdrop-blur-sm transition-all shadow-[0_0_15px_rgba(0,255,255,0.1)] cursor-pointer"
         >
           Skip ▸
         </button>

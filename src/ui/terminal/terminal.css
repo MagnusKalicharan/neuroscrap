@@ -1,0 +1,243 @@
+/* ==========================================================================
+   RETRO GREEN PHOSPHOR CRT TERMINAL STYLES (terminal.css)
+   Measured and calibrated from reference screenshot
+   ========================================================================== */
+
+:root {
+  /* Sampled Color Palette */
+  --term-outline-green: #1ca848;
+  --term-header-green: #18d248;
+  --term-dark-bg: #061409;
+  --term-dark-panel: #040e06;
+  --term-pale-fill: #c2eacb;
+  --term-pale-fill-bright: #dff6e5;
+  --term-dark-text: #031206;
+  --term-green-text: #2ee85c;
+  --term-green-text-bright: #4bff7b;
+  --term-green-text-dim: #18983b;
+  --term-connector-green: #26d649;
+  --term-strip-green: #1ce542;
+  --term-border-dark: #0a2410;
+
+  /* Typography */
+  --term-font-mono: var(--font-mono, "Share Tech Mono", "Courier New", monospace);
+  --term-body-font-size: 19px;
+  --term-label-font-size: 16px;
+  --term-title-font-size: 21px;
+
+  /* Proportions (relative to 1280x720 design canvas) */
+  --term-frame-radius: 16px;
+  --term-frame-border-width: 3px;
+  --term-header-height: 34px;
+  --term-footer-height: 32px;
+  --term-left-col-width: 260px;
+  --term-col-gap: 48px;
+  --term-folder-slot-height: 86px;
+  --term-folder-slot-gap: 16px;
+  --term-file-slot-height: 52px;
+  --term-strip-height: 22px;
+}
+
+/* ── Stage Container & Responsive Scaling ───────────────────────────────── */
+.terminal-stage-wrapper {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #010402;
+  overflow: hidden;
+  z-index: 1000;
+  font-family: var(--term-font-mono);
+}
+
+.terminal-stage {
+  width: 1280px;
+  height: 720px;
+  min-width: 1280px;
+  min-height: 720px;
+  position: relative;
+  transform-origin: center center;
+  user-select: none;
+  background-color: var(--term-dark-bg);
+  border: var(--term-frame-border-width) solid var(--term-outline-green);
+  border-radius: var(--term-frame-radius);
+  box-shadow:
+    0 0 50px rgba(28, 168, 72, 0.25),
+    inset 0 0 60px rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Small Viewport Warning (< 1024x600) ────────────────────────────────── */
+.terminal-enlarge-warning {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background-color: #020803;
+  color: var(--term-green-text);
+  font-family: var(--term-font-mono);
+  padding: 24px;
+  text-align: center;
+  z-index: 10000;
+}
+
+@media (max-width: 1023px), (max-height: 599px) {
+  .terminal-enlarge-warning {
+    display: flex;
+  }
+  .terminal-stage-wrapper {
+    display: none;
+  }
+}
+
+/* ── CRT Overlays & Effects ─────────────────────────────────────────────── */
+.terminal-scanlines {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  opacity: 0.08;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.6) 0px,
+    rgba(0, 0, 0, 0.6) 1.5px,
+    transparent 1.5px,
+    transparent 3px
+  );
+}
+
+.terminal-vignette {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  box-shadow:
+    inset 0 0 90px rgba(0, 0, 0, 0.9),
+    inset 0 0 20px rgba(28, 168, 72, 0.12);
+}
+
+/* Faint phosphor flicker (0.5 Hz, +/-2% opacity wobble) */
+@keyframes term-phosphor-flicker {
+  0%, 100% { opacity: 0.98; }
+  50% { opacity: 1.0; }
+}
+
+.terminal-stage.flicker-active {
+  animation: term-phosphor-flicker 2s infinite ease-in-out;
+}
+
+/* ── CRT Power-on Boot Animation (350ms) ────────────────────────────────── */
+@keyframes term-boot-line {
+  0% {
+    transform: scaleY(0.005) scaleX(0.05);
+    filter: brightness(3.5);
+  }
+  45% {
+    transform: scaleY(0.02) scaleX(1);
+    filter: brightness(2.8);
+  }
+  75% {
+    transform: scaleY(0.9) scaleX(1);
+    filter: brightness(1.4);
+  }
+  100% {
+    transform: scaleY(1) scaleX(1);
+    filter: brightness(1);
+  }
+}
+
+.terminal-booting {
+  animation: term-boot-line 350ms cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
+
+/* ── Phosphor Glow on Green Text ────────────────────────────────────────── */
+.term-glow {
+  text-shadow: 0 0 6px rgba(46, 232, 92, 0.5);
+}
+
+/* ── Typography & Slots ─────────────────────────────────────────────────── */
+.term-caps {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 600;
+}
+
+/* Inverted Slot (Active Pale Panel with Dark Text) */
+.term-slot-active {
+  background-color: var(--term-pale-fill);
+  color: var(--term-dark-text);
+  border: 1px solid var(--term-pale-fill-bright);
+  box-shadow: 0 0 16px rgba(194, 234, 203, 0.45);
+  font-weight: 700;
+}
+
+/* Subtle scanlines inside pale active panel (6% opacity) */
+.term-slot-active-shimmer {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(3, 18, 6, 0.06) 0px,
+    rgba(3, 18, 6, 0.06) 1.5px,
+    transparent 1.5px,
+    transparent 3px
+  );
+}
+
+/* Inactive Outlined Slot */
+.term-slot-outline {
+  background-color: transparent;
+  color: var(--term-green-text);
+  border: 1px solid var(--term-outline-green);
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.term-slot-outline:hover:not(.term-slot-empty) {
+  border-color: var(--term-green-text-bright);
+  color: var(--term-green-text-bright);
+  background-color: rgba(28, 168, 72, 0.08);
+}
+
+/* Empty Outlined Slot (skips focus, buzz on click) */
+.term-slot-empty {
+  background-color: transparent;
+  border: 1px solid var(--term-outline-green);
+  opacity: 0.95;
+  cursor: not-allowed;
+}
+
+/* ── Custom Thin CRT Scrollbar ──────────────────────────────────────────── */
+.term-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.term-scrollbar::-webkit-scrollbar-track {
+  background: rgba(3, 18, 6, 0.15);
+}
+.term-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--term-outline-green);
+  border-radius: 0px;
+}
+.term-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--term-green-text-bright);
+}
+.term-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-outline-green) rgba(3, 18, 6, 0.15);
+}
+
+/* ── Reduced Motion Override ────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .terminal-stage.flicker-active {
+    animation: none !important;
+  }
+  .terminal-booting {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}

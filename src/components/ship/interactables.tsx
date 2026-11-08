@@ -14,6 +14,8 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { shipAudio } from "../../audio/shipAudio";
 import { getScreenTexture } from "./materials";
+import { telemetryStore } from "../telemetry/telemetryStore";
+import { DataStation } from "../../stations/dataStation/DataStation";
 
 export interface LogEntry {
   title: string;
@@ -60,7 +62,10 @@ interface InteractablesProps {
   powerRestored: boolean;
   onRestorePower: () => void;
   onOpenLog?: (log: LogEntry | null) => void;
+  onOpenCrewTerminal?: () => void;
+  onInteractionPrompt?: (prompt: string | null) => void;
   reducedMotion?: boolean;
+  onInputLocked?: (locked: boolean) => void;
 }
 
 const _playerDistVec = new THREE.Vector3();
@@ -69,11 +74,15 @@ export function ShipInteractables({
   powerRestored,
   onRestorePower,
   onOpenLog,
+  onOpenCrewTerminal,
+  onInteractionPrompt,
   reducedMotion = false,
+  onInputLocked,
 }: InteractablesProps) {
   const [steamValveClosed, setSteamValveClosed] = useState(false);
   const [dataPadCollected, setDataPadCollected] = useState(false);
   const [activePrompt, setActivePrompt] = useState<string | null>(null);
+  const activePromptRef = useRef<string | null>(null);
 
   // Lever rotation animation
   const leverAngle = useRef(0); // 0 = unpulled, 0.9 = pulled
@@ -86,6 +95,10 @@ export function ShipInteractables({
       new THREE.MeshBasicMaterial({
         map: screenTex,
         toneMapped: false,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
       }),
     [screenTex]
   );
@@ -122,6 +135,73 @@ export function ShipInteractables({
     []
   );
 
+  const terminalChassisMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: 0x1c2430,
+        roughness: 0.45,
+        metalness: 0.85,
+      }),
+    []
+  );
+
+  const deskMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: 0x10161f,
+        roughness: 0.65,
+        metalness: 0.9,
+      }),
+    []
+  );
+
+  const greenGlowMat = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: 0x22c55e,
+        toneMapped: false,
+      }),
+    []
+  );
+
+  const amberGlowMat = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: 0xffaa00,
+        toneMapped: false,
+      }),
+    []
+  );
+
+  const cyanGlowMat = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        toneMapped: false,
+      }),
+    []
+  );
+
+  const pendriveBodyMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: 0x334155,
+        roughness: 0.3,
+        metalness: 0.9,
+      }),
+    []
+  );
+
+  const pendriveGoldMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: 0xd4af37,
+        roughness: 0.2,
+        metalness: 0.95,
+      }),
+    []
+  );
+
   // Proximity check in useFrame
   useFrame(({ camera }) => {
     const p = camera.position;
@@ -134,34 +214,34 @@ export function ShipInteractables({
     _playerDistVec.set(-3.2, 1.8, -21);
     const distValve = p.distanceTo(_playerDistVec);
 
-    // 3. Bridge Terminal (x: 0, y: 1.2, z: -43)
-    _playerDistVec.set(0, 1.2, -43);
+    // 3. Bridge Terminal Console (x: 0, y: 1.25, z: -42.2)
+    _playerDistVec.set(0, 1.25, -42.2);
     const distBridge = p.distanceTo(_playerDistVec);
 
-    // 4. Crew Terminal (x: 6.5, y: 1.2, z: -7.5)
-    _playerDistVec.set(6.5, 1.2, -7.5);
-    const distCrew = p.distanceTo(_playerDistVec);
-
-    // 5. Data Pad (x: -8, y: 3.6, z: 12 on Mezzanine)
+    // 4. Data Pad (x: -8, y: 3.6, z: 12 on Mezzanine)
     _playerDistVec.set(-8, 3.6, 12);
     const distPad = p.distanceTo(_playerDistVec);
 
+    let nextPrompt: string | null = null;
+
     if (distLever < 2.5) {
-      setActivePrompt(
-        powerRestored
-          ? "AUXILIARY POWER ONLINE"
-          : "PRESS [E] TO RESTORE SHIP POWER"
-      );
+      nextPrompt = powerRestored
+        ? "AUXILIARY POWER ONLINE"
+        : "PRESS [E] TO RESTORE SHIP POWER";
     } else if (distValve < 2.2 && !steamValveClosed) {
-      setActivePrompt("PRESS [E] TO CLOSE COOLANT VALVE");
-    } else if (distBridge < 2.5) {
-      setActivePrompt("PRESS [E] TO READ FLIGHT RECORDER");
-    } else if (distCrew < 2.5) {
-      setActivePrompt("PRESS [E] TO ACCESS CREW TERMINAL");
+      nextPrompt = "PRESS [E] TO CLOSE COOLANT VALVE";
+    } else if (distBridge < 2.8) {
+      nextPrompt = "PRESS [E] TO READ FLIGHT RECORDER";
     } else if (distPad < 2.2 && !dataPadCollected) {
-      setActivePrompt("PRESS [E] TO PICK UP ENCRYPTED DATA PAD");
+      nextPrompt = "PRESS [E] TO PICK UP ENCRYPTED DATA PAD";
     } else {
-      setActivePrompt(null);
+      nextPrompt = null;
+    }
+
+    if (nextPrompt !== activePromptRef.current) {
+      activePromptRef.current = nextPrompt;
+      setActivePrompt(nextPrompt);
+      onInteractionPrompt?.(nextPrompt);
     }
 
     // Lever animation
@@ -169,24 +249,32 @@ export function ShipInteractables({
     leverAngle.current = THREE.MathUtils.lerp(leverAngle.current, targetAngle, 0.1);
   });
 
-  // Keydown listener for interaction [E]
+  // Stable Keydown listener for interaction [E]
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.code !== "KeyE") return;
+      const prompt = activePromptRef.current;
+      if (!prompt) return;
 
-      if (activePrompt?.includes("RESTORE SHIP POWER") && !powerRestored) {
+      if (prompt.includes("RESTORE SHIP POWER") && !powerRestored) {
         shipAudio.playPowerRestoreSequence();
         onRestorePower();
-      } else if (activePrompt?.includes("CLOSE COOLANT VALVE")) {
+      } else if (prompt.includes("CLOSE COOLANT VALVE")) {
         setSteamValveClosed(true);
         shipAudio.playConsoleBeep();
-      } else if (activePrompt?.includes("FLIGHT RECORDER")) {
+      } else if (prompt.includes("FLIGHT RECORDER")) {
         shipAudio.playConsoleBeep();
         onOpenLog?.(SHIP_LOGS.bridge_log);
-      } else if (activePrompt?.includes("CREW TERMINAL")) {
+      } else if (
+        prompt.includes("CREW TERMINAL") ||
+        prompt.includes("TELEMETRY PENDRIVE") ||
+        prompt.includes("DATA STATION") ||
+        prompt.includes("INSERT TELEMETRY")
+      ) {
         shipAudio.playConsoleBeep();
-        onOpenLog?.(SHIP_LOGS.crew_log);
-      } else if (activePrompt?.includes("DATA PAD")) {
+        telemetryStore.setTerminalOpen(true);
+        onOpenCrewTerminal?.();
+      } else if (prompt.includes("DATA PAD")) {
         setDataPadCollected(true);
         shipAudio.playConsoleBeep();
       }
@@ -194,7 +282,7 @@ export function ShipInteractables({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activePrompt, powerRestored, onRestorePower, onOpenLog]);
+  }, [powerRestored, onRestorePower, onOpenLog, onOpenCrewTerminal]);
 
   return (
     <group name="ship-interactables">
@@ -260,23 +348,21 @@ export function ShipInteractables({
         )}
       </group>
 
-      {/* ── 3. BRIDGE CRT TERMINAL SCREEN ── */}
-      <mesh
-        position={[0, 1.35, -43.8]}
-        rotation={[-0.35, 0, 0]}
-        material={screenMat}
-      >
-        <planeGeometry args={[2.2, 1.1]} />
-      </mesh>
+      {/* ── 3. BRIDGE CRT TERMINAL (Replaced by modern Three Cockpit Computers in src/stations/computers) ── */}
 
-      {/* ── 4. CREW QUARTERS LOG SCREEN ── */}
-      <mesh
-        position={[6.5, 1.35, -7.5]}
-        rotation={[-0.35, Math.PI, 0]}
-        material={screenMat}
-      >
-        <planeGeometry args={[1.6, 0.9]} />
-      </mesh>
+      {/* ── 4. 3D DATA STATION (Wrap-around Triple Monitor Console with Arch & Status Bar) ── */}
+      <DataStation
+        reducedMotion={reducedMotion}
+        onPromptChange={onInteractionPrompt}
+        onInputLocked={onInputLocked}
+        onUploadBatch={() => {
+          try {
+            shipAudio.playPowerRestoreSequence();
+          } catch {
+            // Audio manager safe call
+          }
+        }}
+      />
 
       {/* ── 5. COLLECTIBLE DATA PAD (on Cargo Bay Mezzanine) ── */}
       {!dataPadCollected && (

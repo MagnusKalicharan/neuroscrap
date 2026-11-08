@@ -41,6 +41,23 @@ import { ShipAudio, notifyFootstep, surfaceAt, playInteraction } from "../audio/
 import Scene1 from "../scenes/scene1/Scene1";
 import CrashCinematic from "../scenes/scene1/crash/CrashCinematic";
 import Scene2, { Scene2Canvas } from "../scenes/scene2/Scene2";
+import {
+  useTelemetryStore,
+  telemetryStore,
+  type CelestialCategory,
+} from "./telemetry/telemetryStore";
+import { PendriveTerminal } from "../ui/terminal/PendriveTerminal";
+import { RelayInteractionManager } from "../section2/RelayInteractionManager";
+import { RelayScannerHUD } from "../section2/RelayScannerHUD";
+import { relayStore, useRelayStore } from "../section2/relayStore";
+import {
+  devResetAllProgressToStoryline,
+  devJumpToSection2Transmission,
+  devResetSection2Only,
+  devSkipImagesAndUnlockSection2,
+  isImagesValidated,
+} from "../section2/section2Dev";
+import { pendriveStore } from "../ui/terminal/pendriveStore";
 
 // ============================================================
 // TUNABLE GAMEPLAY CONSTANTS
@@ -75,6 +92,90 @@ const _camUp = new THREE.Vector3();
 const _sFwd = new THREE.Vector3();
 const _sRight = new THREE.Vector3();
 const _sUp = new THREE.Vector3();
+
+// ============================================================
+// CELESTIAL TARGET IDENTIFICATION (Physical Telemetry Scanning)
+// ============================================================
+export interface CelestialTarget {
+  name: string;
+  targetName: string;
+  category: CelestialCategory;
+  gravity: number;
+  elevationDeg: number;
+  azimuthDeg: number;
+  description: string;
+}
+
+const BH_WORLD_DIR_VEC = new THREE.Vector3(-0.35, 0.55, -0.75).normalize();
+const PLANET_KRONOS_DIR = new THREE.Vector3(38, 54, 94).normalize();
+const PLANET_IGNIS_DIR = new THREE.Vector3(82, 16, 52).normalize();
+const PLANET_GLACIES_DIR = new THREE.Vector3(-48, 62, 70).normalize();
+
+export function getSkyCelestialTarget(forward: THREE.Vector3): CelestialTarget | null {
+  if (forward.y < 0.08) return null;
+
+  const elevationDeg = Math.asin(THREE.MathUtils.clamp(forward.y, -1, 1)) * (180 / Math.PI);
+  const azimuthDeg = (Math.atan2(forward.x, forward.z) * (180 / Math.PI) + 360) % 360;
+
+  // 1. Black Hole (Supermassive singularity with wide accretion disc)
+  if (forward.dot(BH_WORLD_DIR_VEC) > 0.82) {
+    return {
+      name: "Black Hole",
+      targetName: "Black Hole",
+      category: "black_hole",
+      gravity: 0.98,
+      elevationDeg,
+      azimuthDeg,
+      description: "Strong gravity (0.98 G).",
+    };
+  }
+
+  // 2. Planets (Gas Giant, Lava Planet, Ice Planet)
+  if (forward.dot(PLANET_KRONOS_DIR) > 0.92) {
+    return {
+      name: "Gas Giant",
+      targetName: "Gas Giant",
+      category: "planet",
+      gravity: 0.48,
+      elevationDeg,
+      azimuthDeg,
+      description: "Large ringed gas planet (0.48 G).",
+    };
+  }
+  if (forward.dot(PLANET_IGNIS_DIR) > 0.92) {
+    return {
+      name: "Lava Planet",
+      targetName: "Lava Planet",
+      category: "planet",
+      gravity: 0.38,
+      elevationDeg,
+      azimuthDeg,
+      description: "Hot volcanic lava planet (0.38 G).",
+    };
+  }
+  if (forward.dot(PLANET_GLACIES_DIR) > 0.92) {
+    return {
+      name: "Ice Planet",
+      targetName: "Ice Planet",
+      category: "planet",
+      gravity: 0.42,
+      elevationDeg,
+      azimuthDeg,
+      description: "Cold icy planet (0.42 G).",
+    };
+  }
+
+  // 3. Distant Stars (Deep space / Near-Zero Gravity)
+  return {
+    name: "Distant Stars",
+    targetName: "Distant Stars",
+    category: "stars",
+    gravity: 0.02,
+    elevationDeg,
+    azimuthDeg,
+    description: "Far away stars with near-zero gravity (0.02 G).",
+  };
+}
 
 // ============================================================
 // PROCEDURAL SCI-FI SOUND SYNTHESIS ENGINE (Web Audio API)
@@ -701,29 +802,40 @@ export const playerInputLocked = { current: false };
 interface PlayerProps {
   isLocked: boolean;
   inputLocked?: boolean;
+  hasActivePrompt?: boolean;
+  isImagesDone?: boolean;
   flashlight: boolean;
   setFlashlight: React.Dispatch<React.SetStateAction<boolean>>;
   triggerPing: () => void;
   setTargetInfo: React.Dispatch<React.SetStateAction<any>>;
+  setSkyTarget: React.Dispatch<React.SetStateAction<CelestialTarget | null>>;
+  onCaptureSkyScan: (target: CelestialTarget) => void;
 }
 
 function Player({
   isLocked,
   inputLocked = false,
+  hasActivePrompt = false,
+  isImagesDone = false,
   flashlight,
   setFlashlight,
   triggerPing,
   setTargetInfo,
+  setSkyTarget,
+  onCaptureSkyScan,
 }: PlayerProps) {
   const { camera } = useThree();
   const keys = usePlayerControls();
   const lastValidForward = useRef(new THREE.Vector3(0, 0, -1));
   const spotLightRef = useRef<THREE.SpotLight>(null);
   const spotTargetRef = useRef<THREE.Object3D>(new THREE.Object3D());
+  const currentSkyTargetRef = useRef<CelestialTarget | null>(null);
+  const currentTargetInfoRef = useRef<{ name: string; distance: string } | null>(null);
 
   // Spawn inside the crashed spaceship interior, looking toward the open roof breach (or custom test camera)
   useEffect(() => {
     if (typeof window !== "undefined") {
+      (window as any).__threeCamera = camera;
       const params = new URLSearchParams(window.location.search);
       const cx = params.get("camX");
       const cy = params.get("camY");
@@ -750,26 +862,39 @@ function Player({
     if (!isLocked) {
       _velocity.set(0, 0, 0);
       setTargetInfo(null);
+      setSkyTarget(null);
+      currentSkyTargetRef.current = null;
     }
-  }, [isLocked, setTargetInfo]);
+  }, [isLocked, setTargetInfo, setSkyTarget]);
 
-  // Tactical Keybindings: Flashlight (T) & Planetary Sonar Ping (E/F)
+  // Tactical Keybindings: Flashlight (T) & Planetary Sonar Ping / Celestial Scan (E/F)
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!isLocked) return;
+      if (playerInputLocked.current) return;
       if (e.code === "KeyT" || e.code === "KeyL") {
         setFlashlight((f) => {
           playInteraction("flashlight");
           return !f;
         });
       }
-      if (e.code === "KeyE" || e.code === "KeyF") {
+      const isRelayTargeting = Boolean(relayStore.getState().activeTargetNodeId);
+      const isImagesCompleted = isImagesDone || isImagesValidated();
+      if (e.code === "KeyF") {
+        if (!isRelayTargeting && !isImagesCompleted) {
+          onCaptureSkyScan(currentSkyTargetRef.current as any);
+        }
         triggerPing();
+      } else if (e.code === "KeyE") {
+        if (!hasActivePrompt && !isRelayTargeting && !isImagesCompleted && currentSkyTargetRef.current) {
+          onCaptureSkyScan(currentSkyTargetRef.current as any);
+        }
+        // Note: Key [E] is strictly for interaction. Do not invoke triggerPing() here.
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isLocked, triggerPing, setFlashlight]);
+  }, [isLocked, triggerPing, setFlashlight, onCaptureSkyScan, hasActivePrompt, isImagesDone]);
 
   useFrame((_, delta) => {
     // Strictly stabilize first-person camera: enforce zero roll (no tilted view)
@@ -904,8 +1029,24 @@ function Player({
       spotLightRef.current.target = spotTargetRef.current;
     }
 
-    // 6. TACTICAL TARGET SCANNER RAY (Updated every 6 frames for peak 120 FPS performance)
-    _scanFrameCount++;
+    // 6. TACTICAL TARGET SCANNER RAY (Only active during Section 1 Celestial Sky Photography)
+    if (!isImagesDone && !isImagesValidated()) {
+      _scanFrameCount++;
+      if (_scanFrameCount % 4 === 0) {
+        camera.getWorldDirection(_camFwd);
+        const sky = getSkyCelestialTarget(_camFwd);
+        if (sky?.name !== currentSkyTargetRef.current?.name) {
+          currentSkyTargetRef.current = sky;
+          setSkyTarget(sky);
+        }
+      }
+    } else {
+      if (currentSkyTargetRef.current !== null) {
+        currentSkyTargetRef.current = null;
+        setSkyTarget(null);
+      }
+    }
+
     if (_scanFrameCount % 6 === 0) {
       let closest: WorldObstacle | null = null;
       let closestDist = 14.0;
@@ -927,13 +1068,23 @@ function Player({
       }
 
       if (closest) {
-        setTargetInfo({
-          name: closest.name,
-          type: closest.type,
-          distance: closestDist.toFixed(1),
-          description: closest.description,
-        });
-      } else {
+        const distStr = closestDist.toFixed(1);
+        if (
+          !currentTargetInfoRef.current ||
+          currentTargetInfoRef.current.name !== closest.name ||
+          currentTargetInfoRef.current.distance !== distStr
+        ) {
+          const info = {
+            name: closest.name,
+            type: closest.type,
+            distance: distStr,
+            description: closest.description,
+          };
+          currentTargetInfoRef.current = { name: closest.name, distance: distStr };
+          setTargetInfo(info);
+        }
+      } else if (currentTargetInfoRef.current !== null) {
+        currentTargetInfoRef.current = null;
         setTargetInfo(null);
       }
     }
@@ -1234,9 +1385,10 @@ void main() {
       }
     }
 
-    vec3 acc = -1.5 * h2 * pos / (r2 * r2 * r);
+    vec3 acc = -1.5 * h2 * pos / max(0.05, (r2 * r2 * r));
     vel += acc * dt;
     pos += vel * dt;
+    if (dot(pos, pos) <= 1.05) { captured = true; break; }
   }
 
   // Pure Event Horizon Shadow:
@@ -1248,11 +1400,18 @@ void main() {
 
   if (escaped && !captured && uStars > 0.001) {
     vec3 toHole = normalize(-uCamPos);
+    vec3 nVel = length(vel) > 1e-4 ? normalize(vel) : normalize(dir);
     float sI = length(cross(normalize(dir), toHole));
-    float sS = length(cross(normalize(vel), toHole));
+    float sS = length(cross(nVel, toHole));
     float stretch = clamp(sI / max(1e-3, sS), 1.0, 40.0);
-    col += starField(normalize(vel)) * uStars * transmit / stretch;
+    col += starField(nVel) * uStars * transmit / stretch;
   }
+
+  // Sanitize NaN / Inf and clamp dynamic range
+  if (!(col.x >= 0.0 && col.x <= 50.0)) col.x = 0.0;
+  if (!(col.y >= 0.0 && col.y <= 50.0)) col.y = 0.0;
+  if (!(col.z >= 0.0 && col.z <= 50.0)) col.z = 0.0;
+  col = clamp(col, 0.0, 30.0);
 
   if (uEncode > 0.5) col = col / (1.0 + col);
   gl_FragColor = vec4(col, 1.0);
@@ -1269,6 +1428,14 @@ uniform float uAlpha;
 void main() {
   vec3 c = texture2D(uCur, vUv).rgb;
   vec3 p = texture2D(uPrev, vUv).rgb;
+  if (!(c.x >= 0.0 && c.x <= 1.0)) c.x = 0.0;
+  if (!(c.y >= 0.0 && c.y <= 1.0)) c.y = 0.0;
+  if (!(c.z >= 0.0 && c.z <= 1.0)) c.z = 0.0;
+  if (!(p.x >= 0.0 && p.x <= 1.0)) p.x = 0.0;
+  if (!(p.y >= 0.0 && p.y <= 1.0)) p.y = 0.0;
+  if (!(p.z >= 0.0 && p.z <= 1.0)) p.z = 0.0;
+  c = clamp(c, 0.0, 1.0);
+  p = clamp(p, 0.0, 1.0);
   gl_FragColor = vec4(mix(p, c, uAlpha), 1.0);
 }
 `;
@@ -1286,10 +1453,17 @@ vec3 aces(vec3 x) {
 
 void main() {
   vec3 scene = texture2D(uScene, vUv).rgb;
-  if (uDecode > 0.5) scene = scene / max(vec3(0.002), 1.0 - scene);
+  // Robustly reject NaN, Inf, and negative artifacts across all GPU drivers
+  if (!(scene.x >= 0.0 && scene.x <= 1.0) ||
+      !(scene.y >= 0.0 && scene.y <= 1.0) ||
+      !(scene.z >= 0.0 && scene.z <= 1.0)) {
+    scene = vec3(0.0);
+  }
+  scene = clamp(scene, 0.0, 0.95);
+  if (uDecode > 0.5) scene = scene / max(vec3(0.05), 1.0 - scene);
   vec3 c = aces(scene * uExposure);
-  c = pow(max(c, 0.0), vec3(0.4545));
-  gl_FragColor = vec4(c, 1.0);
+  c = pow(clamp(c, 0.0, 1.0), vec3(0.4545));
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 }
 `;
 
@@ -1307,10 +1481,27 @@ function CameraSync() {
   const { camera } = useThree();
 
   useFrame(() => {
-    // 1. Get current Three.js first-person camera orientation
-    camera.getWorldDirection(_camFwd);
-    _camRight.crossVectors(_camFwd, camera.up).normalize();
-    _camUp.crossVectors(_camRight, _camFwd).normalize();
+    // 1. Get current Three.js first-person camera orientation directly from matrixWorld
+    camera.updateMatrixWorld();
+    _camRight.set(
+      camera.matrixWorld.elements[0],
+      camera.matrixWorld.elements[1],
+      camera.matrixWorld.elements[2]
+    );
+    _camUp.set(
+      camera.matrixWorld.elements[4],
+      camera.matrixWorld.elements[5],
+      camera.matrixWorld.elements[6]
+    );
+    _camFwd.set(
+      -camera.matrixWorld.elements[8],
+      -camera.matrixWorld.elements[9],
+      -camera.matrixWorld.elements[10]
+    );
+
+    if (_camRight.lengthSq() < 0.001) _camRight.set(1, 0, 0); else _camRight.normalize();
+    if (_camUp.lengthSq() < 0.001) _camUp.set(0, 1, 0); else _camUp.normalize();
+    if (_camFwd.lengthSq() < 0.001) _camFwd.set(0, 0, -1); else _camFwd.normalize();
 
     // 2. Rotate into the Black Hole's celestial frame
     _sFwd.copy(_camFwd).applyQuaternion(Q_ALIGN_SKY);
@@ -1345,8 +1536,17 @@ function useFullscreenBlackHoleSky() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const gl = (canvas.getContext("webgl2", { alpha: false, antialias: false, powerPreference: "high-performance" }) ||
-      canvas.getContext("webgl", { alpha: false, antialias: false })) as
+    const gl = (canvas.getContext("webgl2", {
+      alpha: false,
+      antialias: false,
+      preserveDrawingBuffer: true,
+      powerPreference: "high-performance",
+    }) ||
+      canvas.getContext("webgl", {
+        alpha: false,
+        antialias: false,
+        preserveDrawingBuffer: true,
+      })) as
       | WebGL2RenderingContext
       | WebGLRenderingContext
       | null;
@@ -1408,6 +1608,9 @@ function useFullscreenBlackHoleSky() {
       gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_T, gl!.CLAMP_TO_EDGE);
       gl!.bindFramebuffer(gl!.FRAMEBUFFER, fb);
       gl!.framebufferTexture2D(gl!.FRAMEBUFFER, gl!.COLOR_ATTACHMENT0, gl!.TEXTURE_2D, tex, 0);
+      gl!.viewport(0, 0, w, h);
+      gl!.clearColor(0.0, 0.0, 0.0, 1.0);
+      gl!.clear(gl!.COLOR_BUFFER_BIT);
       gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
       return { fb, tex, w, h };
     }
@@ -2751,7 +2954,19 @@ function CosmicDust() {
 }
 
 // Master 3D Starship Crash Site Scene
-function SpaceshipWreckScene({ pingTimestamp }: { pingTimestamp: number }) {
+interface SpaceshipWreckSceneProps {
+  pingTimestamp: number;
+  onOpenCrewTerminal?: () => void;
+  onInteractionPrompt?: (prompt: string | null) => void;
+  onInputLocked?: (locked: boolean) => void;
+}
+
+function SpaceshipWreckScene({
+  pingTimestamp,
+  onOpenCrewTerminal,
+  onInteractionPrompt,
+  onInputLocked,
+}: SpaceshipWreckSceneProps) {
   return (
     <>
       {/* ── Lighting (Realistic Deep Space) ───────────────────────── */}
@@ -2792,6 +3007,9 @@ function SpaceshipWreckScene({ pingTimestamp }: { pingTimestamp: number }) {
         onReady={(model) => {
           sharedShipColliders.current = model.colliders;
         }}
+        onOpenCrewTerminal={onOpenCrewTerminal}
+        onInteractionPrompt={onInteractionPrompt}
+        onInputLocked={onInputLocked}
       />
       <EngineCoolantVentPlume />
       <CosmicDust />
@@ -2805,83 +3023,68 @@ function SpaceshipWreckScene({ pingTimestamp }: { pingTimestamp: number }) {
 interface GameEngineControlsProps {
   isLocked: boolean;
   inputLocked?: boolean;
+  terminalOpen?: boolean;
+  hasActivePrompt?: boolean;
+  isImagesDone?: boolean;
   setIsLocked: (locked: boolean) => void;
   flashlight: boolean;
   setFlashlight: React.Dispatch<React.SetStateAction<boolean>>;
   triggerPing: () => void;
   setTargetInfo: React.Dispatch<React.SetStateAction<any>>;
+  setSkyTarget: React.Dispatch<React.SetStateAction<CelestialTarget | null>>;
+  onCaptureSkyScan: (target: CelestialTarget) => void;
 }
 
 function GameEngineControls({
   isLocked,
   inputLocked = false,
+  terminalOpen = false,
+  hasActivePrompt = false,
+  isImagesDone = false,
   setIsLocked,
   flashlight,
   setFlashlight,
   triggerPing,
   setTargetInfo,
+  setSkyTarget,
+  onCaptureSkyScan,
 }: GameEngineControlsProps) {
   const controlsRef = useRef<any>(null);
   const { camera } = useThree();
 
-  useEffect(() => {
-    const ctrl = controlsRef.current;
-    if (!ctrl) return;
+  const handleLock = useCallback(() => {
+    setIsLocked(true);
+    camera.rotation.order = "YXZ";
+    camera.rotation.z = 0;
+    shipAudio.resume();
+  }, [camera, setIsLocked]);
 
-    const handleLock = () => {
-      setIsLocked(true);
-      camera.rotation.order = "YXZ";
-      camera.rotation.z = 0;
-      shipAudio.resume();
-    };
-    const handleUnlock = () => {
-      setIsLocked(false);
-      camera.rotation.order = "YXZ";
-      camera.rotation.z = 0;
-    };
-
-    // Suppress console error noise on browser pointer lock cooldown rejection
-    const handlePointerLockError = (e: Event) => {
-      e.stopImmediatePropagation?.();
-    };
-    document.addEventListener("pointerlockerror", handlePointerLockError, true);
-
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      const msg = String(event.reason?.message || event.reason || "");
-      const name = String(event.reason?.name || "");
-      if (
-        name === "NotAllowedError" ||
-        name === "SecurityError" ||
-        msg.includes("Pointer Lock") ||
-        msg.includes("pointer lock") ||
-        msg.includes("user gesture")
-      ) {
-        event.preventDefault();
-      }
-    };
-    window.addEventListener("unhandledrejection", handleUnhandledRejection);
-
-    ctrl.addEventListener("lock", handleLock);
-    ctrl.addEventListener("unlock", handleUnlock);
-
-    return () => {
-      document.removeEventListener("pointerlockerror", handlePointerLockError, true);
-      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
-      ctrl.removeEventListener("lock", handleLock);
-      ctrl.removeEventListener("unlock", handleUnlock);
-    };
-  }, [setIsLocked]);
+  const handleUnlock = useCallback(() => {
+    setIsLocked(false);
+    camera.rotation.order = "YXZ";
+    camera.rotation.z = 0;
+  }, [camera, setIsLocked]);
 
   return (
     <>
-      <PointerLockControls ref={controlsRef} enabled={!inputLocked} />
+      <PointerLockControls
+        ref={controlsRef}
+        selector="#three-canvas-container"
+        enabled={!terminalOpen}
+        onLock={handleLock}
+        onUnlock={handleUnlock}
+      />
       <Player
         isLocked={isLocked}
         inputLocked={inputLocked}
+        hasActivePrompt={hasActivePrompt}
+        isImagesDone={isImagesDone}
         flashlight={flashlight}
         setFlashlight={setFlashlight}
         triggerPing={triggerPing}
         setTargetInfo={setTargetInfo}
+        setSkyTarget={setSkyTarget}
+        onCaptureSkyScan={onCaptureSkyScan}
       />
     </>
   );
@@ -2950,18 +3153,124 @@ export default function Game() {
     description: string;
   } | null>(null);
 
+  // Physical Telemetry Pendrive & Crew Terminal State
+  const { scans, maxScans, terminalOpen } = useTelemetryStore();
+  const relayStoreState = useRelayStore();
+
+  const isImagesDone = React.useSyncExternalStore(
+    (cb) => {
+      const u1 = pendriveStore.subscribe(cb);
+      const u2 = telemetryStore.subscribe(cb);
+      return () => {
+        u1();
+        u2();
+      };
+    },
+    () => isImagesValidated(),
+    () => isImagesValidated()
+  );
+  const diagnosticOpen = relayStoreState.diagnosticConsoleOpen;
+  const [skyTarget, setSkyTarget] = useState<CelestialTarget | null>(null);
+  const [interactionPrompt, setInteractionPrompt] = useState<string | null>(null);
+  const [scanToast, setScanToast] = useState<string | null>(null);
+  const [cameraFlash, setCameraFlash] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as any).__telemetryStore = telemetryStore;
+      telemetryStore.formatPendrive(); // Fresh start on every game entry / page refresh
+    }
+  }, []);
+
+  const countHole = useMemo(
+    () => scans.filter((s) => s.category === "black_hole").length,
+    [scans]
+  );
+  const countPlanet = useMemo(
+    () => scans.filter((s) => s.category === "planet").length,
+    [scans]
+  );
+  const countStars = useMemo(
+    () => scans.filter((s) => s.category === "stars").length,
+    [scans]
+  );
+
+  // Auto unlock cursor when modal opens
+  useEffect(() => {
+    if (terminalOpen || diagnosticOpen) {
+      if (typeof document !== "undefined" && document.pointerLockElement) {
+        document.exitPointerLock?.();
+      }
+    }
+  }, [terminalOpen, diagnosticOpen]);
+
+  // Global suppression of browser pointer lock cooldown / SecurityError rejections
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const msg = String(event.reason?.message || event.reason || "");
+      const name = String(event.reason?.name || "");
+      if (
+        name === "SecurityError" ||
+        name === "NotAllowedError" ||
+        msg.toLowerCase().includes("pointer lock") ||
+        msg.toLowerCase().includes("pointerlock") ||
+        msg.toLowerCase().includes("user gesture") ||
+        msg.toLowerCase().includes("exited the lock")
+      ) {
+        event.preventDefault();
+      }
+    };
+    const handlePointerLockError = (e: Event) => {
+      e.stopImmediatePropagation?.();
+    };
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    document.addEventListener("pointerlockerror", handlePointerLockError, true);
+    return () => {
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+      document.removeEventListener("pointerlockerror", handlePointerLockError, true);
+    };
+  }, []);
+
+  // Native pointer lock change listener so React state is ALWAYS 100% in sync with the browser
+  useEffect(() => {
+    const handlePointerLockChange = () => {
+      const isCurrentlyLocked = Boolean(document.pointerLockElement);
+      setIsLocked(isCurrentlyLocked);
+      if (isCurrentlyLocked) {
+        shipAudio.resume();
+      }
+    };
+    document.addEventListener("pointerlockchange", handlePointerLockChange);
+    return () => {
+      document.removeEventListener("pointerlockchange", handlePointerLockChange);
+    };
+  }, []);
+
   const [scene1Complete, setScene1Complete] = useState(false);
   const [scene2Complete, setScene2Complete] = useState(false);
   const [scene2InputLocked, setScene2InputLocked] = useState(true);
+  const [stationInputLocked, setStationInputLocked] = useState(false);
+  const [isSection2Testing, setIsSection2Testing] = useState(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("section") === "2" || window.location.pathname.includes("/relay");
+    }
+    return false;
+  });
 
-  // Direct scene testing support (?scene=2)
+  // Direct scene testing support (?scene=2, ?scene=3, or ?section=2)
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("hud") === "0") {
         setIsLocked(true);
       }
-      if (params.get("scene") === "2") {
+      if (params.get("section") === "2") {
+        setIsSection2Testing(true);
+        setScene1Complete(true);
+        setScene2Complete(true);
+        setScene2InputLocked(false);
+      } else if (params.get("scene") === "2") {
         setScene1Complete(true);
       } else if (params.get("scene") === "3") {
         setScene1Complete(true);
@@ -2988,13 +3297,99 @@ export default function Game() {
     setPingTimestamp(Date.now() / 1000);
   }, []);
 
+  // Global Keydown listener for [E] when interaction prompt is active (e.g. at Data Station / Crew PC)
+  useEffect(() => {
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+      if (e.code !== "KeyE") return;
+      if (terminalOpen || diagnosticOpen) return;
+      if (
+        interactionPrompt?.includes("DATA STATION") ||
+        interactionPrompt?.includes("CREW TERMINAL") ||
+        interactionPrompt?.includes("TELEMETRY PENDRIVE") ||
+        interactionPrompt?.includes("INSERT PENDRIVE") ||
+        interactionPrompt?.includes("INSERT TELEMETRY") ||
+        interactionPrompt?.includes("DIAGNOSTIC")
+      ) {
+        if (relayStore.getState().consoleUnlocked) {
+          relayStore.setActiveStationTab("diagnostic");
+          relayStore.setDiagnosticConsoleOpen(true);
+        } else {
+          telemetryStore.setTerminalOpen(true);
+        }
+      }
+    }
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [interactionPrompt, terminalOpen, diagnosticOpen]);
+
+  const handleCaptureSkyScan = useCallback((target: CelestialTarget | null) => {
+    // If Phase 1 images are already validated, or aiming at/scanning a relay node, or in Section 2, suppress sky scan toast & capture completely
+    if (isImagesDone || isImagesValidated() || relayStore.getState().activeTargetNodeId || isSection2Testing || telemetryStore.getState().scans.length >= 10) {
+      return;
+    }
+
+    if (!target) {
+      return;
+    }
+
+    const currentScans = telemetryStore.getState().scans;
+    if (currentScans.length >= 10) {
+      setScanToast("PENDRIVE BUFFER FULL (10/10) — INSERT INTO CREW TERMINAL");
+      setTimeout(() => setScanToast(null), 3000);
+      return;
+    }
+
+    // Capture visual snapshot from composite canvases
+    let imageDataUrl: string | undefined = undefined;
+    try {
+      const bhCvs = blackHoleCanvasRef.current;
+      const threeCvs = canvasRef.current || canvasContainerRef.current?.querySelector("canvas");
+      if (threeCvs || bhCvs) {
+        const offscreen = document.createElement("canvas");
+        offscreen.width = 480;
+        offscreen.height = 270;
+        const ctx = offscreen.getContext("2d");
+        if (ctx) {
+          if (bhCvs && bhCvs.width > 0) {
+            ctx.drawImage(bhCvs, 0, 0, 480, 270);
+          }
+          if (threeCvs && threeCvs.width > 0) {
+            ctx.drawImage(threeCvs, 0, 0, 480, 270);
+          }
+          imageDataUrl = offscreen.toDataURL("image/jpeg", 0.7);
+        }
+      }
+    } catch (e) {
+      console.warn("Screenshot capture failed:", e);
+    }
+
+    const added = telemetryStore.addScan({ ...target, imageDataUrl });
+    if (added) {
+      playInteraction("scanner");
+      setCameraFlash(true);
+      setTimeout(() => setCameraFlash(false), 100);
+
+      const nextCount = telemetryStore.getState().scans.length;
+      if (nextCount >= 10) {
+        setScanToast("PENDRIVE FULL (10/10)! INSERT INTO CREW TERMINAL (SMALL PC)");
+      } else {
+        setScanToast(`[PHOTO CAPTURED] ${target.name} -> PENDRIVE (${nextCount}/10)`);
+      }
+      setTimeout(() => setScanToast(null), 2500);
+    }
+  }, []);
+
   const lastLockAttemptRef = useRef(0);
-  const requestGameLock = useCallback(() => {
+  const requestGameLock = useCallback((force = false) => {
+    if (!force && telemetryStore.getState().terminalOpen) return;
     shipAudio.resume();
+    if (typeof document !== "undefined" && document.pointerLockElement) {
+      setIsLocked(true);
+      return;
+    }
     const now = Date.now();
-    // Guard against browser pointer lock cooldown rejection (~1.2s between unlocks)
-    if (now - lastLockAttemptRef.current < 1200) return;
-    if (typeof document !== "undefined" && document.pointerLockElement) return;
+    // Debounce rapid spam clicks slightly (150ms) without dropping responsive user clicks
+    if (now - lastLockAttemptRef.current < 150) return;
     lastLockAttemptRef.current = now;
 
     const canvas = canvasContainerRef.current?.querySelector("canvas");
@@ -3003,7 +3398,15 @@ export default function Game() {
         const promise = canvas.requestPointerLock?.() as any;
         if (promise && typeof promise.catch === "function") {
           promise.catch(() => {
-            // Silently ignore standard browser pointer lock cooldown rejection
+            // Silently retry after browser pointerlock cooldown window (1200ms)
+            setTimeout(() => {
+              if (!document.pointerLockElement && !telemetryStore.getState().terminalOpen) {
+                try {
+                  const p2 = canvas.requestPointerLock?.() as any;
+                  if (p2 && typeof p2.catch === "function") p2.catch(() => {});
+                } catch {}
+              }
+            }, 1250);
           });
         }
       } catch {
@@ -3011,6 +3414,19 @@ export default function Game() {
       }
     }
   }, []);
+
+  // Global Enter / Space shortcut to re-take control when unlocked
+  useEffect(() => {
+    function handleControlResumeKeyDown(e: KeyboardEvent) {
+      if (e.code === "Enter" || e.code === "Space") {
+        if (!isLocked && !telemetryStore.getState().terminalOpen) {
+          requestGameLock(true);
+        }
+      }
+    }
+    window.addEventListener("keydown", handleControlResumeKeyDown);
+    return () => window.removeEventListener("keydown", handleControlResumeKeyDown);
+  }, [isLocked, requestGameLock]);
 
   const isPingActive = (Date.now() / 1000 - pingTimestamp) < 2.0;
 
@@ -3025,9 +3441,10 @@ export default function Game() {
 
       {/* ── LAYER 1: 3D Planetary World (Transparent Canvas) ─────── */}
       <div
+        id="three-canvas-container"
         ref={canvasContainerRef}
-        className="absolute inset-0 z-10 cursor-crosshair"
-        onClick={!isLocked ? requestGameLock : undefined}
+        className={`absolute inset-0 z-10 ${terminalOpen ? "pointer-events-none" : "cursor-crosshair pointer-events-auto"}`}
+        onClick={!isLocked && !terminalOpen ? () => requestGameLock(true) : undefined}
       >
         <Canvas
           dpr={[1, 1.5]}
@@ -3036,20 +3453,33 @@ export default function Game() {
           gl={{
             antialias: true,
             alpha: true, // Transparent clear so the Black Hole Sky shines through
+            preserveDrawingBuffer: true,
           }}
           className="w-full h-full"
         >
           <Suspense fallback={null}>
             <CanvasEnvironmentSetup />
-            <SpaceshipWreckScene pingTimestamp={pingTimestamp} />
+            <SpaceshipWreckScene
+              pingTimestamp={pingTimestamp}
+              onOpenCrewTerminal={() => telemetryStore.setTerminalOpen(true)}
+              onInteractionPrompt={(p) => setInteractionPrompt(p)}
+              onInputLocked={setStationInputLocked}
+            />
+            {/* ── Section 2: Relay Line & Interactive Scanner System ── */}
+            <RelayInteractionManager collidersRef={sharedShipColliders} />
             <GameEngineControls
-              isLocked={isLocked}
-              inputLocked={scene1Complete && !scene2Complete && scene2InputLocked}
+              isLocked={isLocked && !terminalOpen && !diagnosticOpen}
+              inputLocked={(scene1Complete && !scene2Complete && scene2InputLocked) || terminalOpen || diagnosticOpen || stationInputLocked}
+              terminalOpen={terminalOpen || diagnosticOpen}
+              hasActivePrompt={Boolean(interactionPrompt)}
+              isImagesDone={isImagesDone}
               setIsLocked={setIsLocked}
               flashlight={flashlight}
               setFlashlight={setFlashlight}
               triggerPing={triggerPing}
               setTargetInfo={setTargetInfo}
+              setSkyTarget={setSkyTarget}
+              onCaptureSkyScan={handleCaptureSkyScan}
             />
             <ShipAudio playerPositionRef={sharedPlayerPos as any} />
             {crashProgress !== null && (
@@ -3063,6 +3493,73 @@ export default function Game() {
             )}
           </Suspense>
         </Canvas>
+      </div>
+
+      {/* ── Section & Storyline Mode Switcher (Directly shifts to Section 2 storyline and reset) ── */}
+      <div className="fixed top-4 left-6 z-[100] flex items-center gap-2 font-mono select-none">
+        {/* Storyline Mode Button */}
+        <button
+          type="button"
+          onClick={() => {
+            setScene1Complete(true);
+            setScene2Complete(true);
+            setScene2InputLocked(false);
+            devResetAllProgressToStoryline();
+            setScanToast("📖 SWAPPED TO STORYLINE: STARTING SECTION 1 (SKY IMAGES)");
+            setTimeout(() => setScanToast(null), 3000);
+          }}
+          className={`px-3 py-1.5 text-xs font-bold tracking-wider uppercase rounded border transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95 ${
+            !isImagesDone
+              ? "bg-[#092b15] border-[#2ee85c] text-[#4bff7b] shadow-[0_0_12px_rgba(46,232,92,0.35)]"
+              : "bg-black/80 hover:bg-neutral-900 border-neutral-700 text-neutral-400 hover:text-white"
+          }`}
+          title="Reset all progress and play normal Storyline from Section 1"
+        >
+          <span>📖 STORYLINE (SEC 1: IMAGES)</span>
+        </button>
+
+        {/* Jump to Section 2 Button */}
+        <button
+          type="button"
+          onClick={() => {
+            setScene1Complete(true);
+            setScene2Complete(true);
+            setScene2InputLocked(false);
+            devJumpToSection2Transmission();
+            setScanToast("⚡ JUMPED TO SECTION 2: TRANSMISSION UNLOCKED (0/6 SCANNED)");
+            setTimeout(() => setScanToast(null), 3000);
+          }}
+          className={`px-3 py-1.5 text-xs font-bold tracking-wider uppercase rounded border transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95 ${
+            isImagesDone
+              ? "bg-[#092b15] border-[#2ee85c] text-[#4bff7b] shadow-[0_0_12px_rgba(46,232,92,0.35)]"
+              : "bg-black/80 hover:bg-neutral-900 border-neutral-700 text-neutral-400 hover:text-white"
+          }`}
+          title="Directly complete Section 1 and unlock Section 2 Transmission fresh"
+        >
+          <span>⚡ JUMP TO SEC 2 (TRANSMISSION)</span>
+        </button>
+
+        {/* Reset Current Section Button */}
+        <button
+          type="button"
+          onClick={() => {
+            setScene1Complete(true);
+            setScene2Complete(true);
+            setScene2InputLocked(false);
+            if (isImagesDone) {
+              devResetSection2Only();
+              setScanToast("↺ SECTION 2 RESET: 0/6 RELAYS SCANNED");
+            } else {
+              devResetAllProgressToStoryline();
+              setScanToast("↺ SECTION 1 RESET: 0/10 SCANS");
+            }
+            setTimeout(() => setScanToast(null), 2500);
+          }}
+          className="px-2.5 py-1.5 text-xs font-bold tracking-wider uppercase rounded border border-neutral-700 hover:border-amber-500 bg-black/80 hover:bg-neutral-900 text-neutral-400 hover:text-amber-400 transition-all cursor-pointer active:scale-95"
+          title="Reset current section back to 0 progress"
+        >
+          <span>↺ RESET</span>
+        </button>
       </div>
 
       {/* ── Navigation / Return Button ─────────────────────────── */}
@@ -3104,9 +3601,9 @@ export default function Game() {
       )}
 
       {/* ── Start / Click-to-Play Overlay (Only active after Scene 1 & 2 complete and if unlocked) ── */}
-      {scene1Complete && scene2Complete && !isLocked && (
+      {scene1Complete && scene2Complete && !isLocked && !terminalOpen && !diagnosticOpen && (
         <div
-          onClick={requestGameLock}
+          onClick={() => requestGameLock(true)}
           className="fixed inset-0 z-30 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[2px] cursor-pointer"
         >
           <div className="text-center p-8 border border-cyan-500/40 bg-black/80 rounded-lg shadow-[0_0_40px_rgba(0,255,255,0.25)] max-w-lg mx-4">
@@ -3121,7 +3618,7 @@ export default function Game() {
               <div><span className="text-white font-bold">SHIFT</span> — Sprint</div>
               <div><span className="text-white font-bold">MOUSE</span> — Look (360°)</div>
               <div><span className="text-white font-bold">T</span> — Flashlight</div>
-              <div><span className="text-white font-bold">E / F</span> — Sonar Ping</div>
+              <div><span className="text-white font-bold">E / F</span> — Sonar Ping / Sky Scan</div>
               <div><span className="text-white font-bold">ESC</span> — Unlock Cursor</div>
             </div>
             <div className="mt-4 text-[11px] text-amber-300/90 font-mono tracking-wider">
@@ -3131,43 +3628,117 @@ export default function Game() {
         </div>
       )}
 
+      {/* ── Visual Camera Shutter Optical Flash ─────────────────────────────────── */}
+      {cameraFlash && (
+        <div className="fixed inset-0 z-50 bg-white/40 pointer-events-none transition-opacity duration-100" />
+      )}
+
       {/* ── Crosshair (Only visible after Scene 1 & 2 complete when pointer-locked) ────────── */}
-      {scene1Complete && scene2Complete && isLocked && (
+      {scene1Complete && scene2Complete && isLocked && !terminalOpen && !diagnosticOpen && (
         <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white/90 shadow-[0_0_8px_rgba(0,255,255,0.9)] pointer-events-none z-30" />
       )}
 
-      {/* ── Tactical AR Object Target Scanner HUD (Only after Scene 1 & 2 complete) ──────────────── */}
-      {scene1Complete && scene2Complete && isLocked && targetInfo && (
-        <div className="fixed top-6 right-6 z-30 max-w-sm p-3.5 bg-black/85 border border-cyan-400/50 rounded-lg backdrop-blur-md shadow-[0_0_25px_rgba(0,255,255,0.2)] font-mono text-xs pointer-events-none transition-all">
+      {/* ── Dynamic Sky Celestial Scanner HUD Reticle ──────────────────────────── */}
+      {scene1Complete && scene2Complete && isLocked && !isImagesDone && !isImagesValidated() && skyTarget && !interactionPrompt && !terminalOpen && !isSection2Testing && scans.length < maxScans && (
+        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-[52px] z-30 pointer-events-none flex flex-col items-center font-mono">
+          <div className="px-2.5 py-1 bg-black/85 border border-cyan-400/60 rounded text-[10px] text-cyan-300 backdrop-blur-sm whitespace-nowrap shadow-[0_0_15px_rgba(0,255,255,0.3)]">
+            <span className="text-amber-400 font-bold">CELESTIAL: </span>
+            <span className="text-white font-bold">{skyTarget.name}</span>
+            <span className="text-neutral-400"> // GRAV: </span>
+            <span className="text-cyan-400 font-bold">{skyTarget.gravity} G</span>
+          </div>
+          <div className="text-[9px] text-cyan-300/90 mt-0.5 tracking-wider font-bold">
+            {scans.length < maxScans
+              ? `PRESS [E / F] TO RECORD SCAN (${scans.length}/${maxScans})`
+              : "PENDRIVE FULL (10/10) — INSERT INTO CREW PC"}
+          </div>
+        </div>
+      )}
+
+      {/* ── Top-Left: Mission Telemetry Pendrive HUD Widget ────────────────────── */}
+      {scene1Complete && scene2Complete && !terminalOpen && !isSection2Testing && !isImagesDone && !isImagesValidated() && scans.length < maxScans && (
+        <div className="fixed top-16 left-6 z-30 w-72 p-3 bg-black/85 border border-cyan-400/50 rounded-lg backdrop-blur-md shadow-[0_0_20px_rgba(0,255,255,0.2)] font-mono text-xs pointer-events-none select-none">
+          {/* Header */}
           <div className="flex items-center justify-between border-b border-cyan-500/30 pb-1.5 mb-2">
             <span className="text-cyan-400 font-bold tracking-wider flex items-center gap-1.5 text-[11px]">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-              TARGET PROXIMITY SCAN
+              🖴 TELEMETRY PENDRIVE
             </span>
-            <span className="text-cyan-200/80 font-bold">{targetInfo.distance}m</span>
+            <span className="text-cyan-200 font-bold">{scans.length} / {maxScans}</span>
           </div>
-          <div className="text-white font-bold text-sm tracking-wide mb-1">
-            {targetInfo.name}
+
+          {/* Progress Bar */}
+          <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800 mb-2">
+            <div
+              className="h-full bg-cyan-400 transition-all duration-300 shadow-[0_0_8px_#19f0ff]"
+              style={{ width: `${(scans.length / maxScans) * 100}%` }}
+            />
           </div>
-          <div className="text-cyan-200/75 text-[11px] leading-relaxed mb-2">
-            {targetInfo.description}
+
+          {/* Category Badges */}
+          <div className="grid grid-cols-3 gap-1 mb-2 text-center text-[10px]">
+            <div className="px-1 py-0.5 rounded bg-red-950/40 border border-red-500/30 text-red-300">
+              BH: {countHole}
+            </div>
+            <div className="px-1 py-0.5 rounded bg-cyan-950/40 border border-cyan-500/30 text-cyan-300">
+              PLANET: {countPlanet}
+            </div>
+            <div className="px-1 py-0.5 rounded bg-amber-950/40 border border-amber-500/30 text-amber-300">
+              STARS: {countStars}
+            </div>
           </div>
-          <div className="flex items-center justify-between text-[10px] text-cyan-400/80 pt-1 border-t border-cyan-500/20">
-            <span>COLLISION: ACTIVE</span>
-            <span className="text-amber-400 font-bold">NON-PASSABLE OBSTACLE</span>
+
+          {/* Instruction hint */}
+          <div className="text-[10px] text-cyan-200/80 leading-tight">
+            {scans.length < maxScans ? (
+              <span>Aim at sky & press <strong className="text-white">[E / F]</strong> to record</span>
+            ) : (
+              <span className="text-emerald-400 font-bold">✔ PENDRIVE READY — INSERT INTO CREW PC</span>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── Active Sonar Ping Banner (Only after Scene 1 & 2 complete) ────────────────────────────── */}
-      {scene1Complete && scene2Complete && isLocked && isPingActive && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 px-4 py-1.5 bg-cyan-950/80 border border-cyan-400 text-cyan-300 font-mono text-xs tracking-widest rounded shadow-[0_0_20px_rgba(0,255,255,0.4)] pointer-events-none backdrop-blur-md animate-pulse">
-          TERRAIN SONAR PING ACTIVE — MAPPING OBSTACLE COLLIDERS
+      {/* ── Scan Feedback Toast (Center-Top) ─────────────────────────────────── */}
+      {scanToast && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-black/90 border border-cyan-400 text-cyan-300 font-mono text-xs tracking-wider rounded-lg shadow-[0_0_20px_rgba(0,255,255,0.4)] pointer-events-none backdrop-blur-md animate-pulse">
+          {scanToast}
         </div>
+      )}
+
+
+      {/* ── Active World Object Interaction Prompt (e.g. at Crew Terminal PC) ────── */}
+      {interactionPrompt && !terminalOpen && !diagnosticOpen && (
+        <button
+          onClick={() => {
+            if (
+              interactionPrompt.includes("CREW TERMINAL") ||
+              interactionPrompt.includes("TELEMETRY PENDRIVE") ||
+              interactionPrompt.includes("INSERT PENDRIVE") ||
+              interactionPrompt.includes("DATA STATION") ||
+              interactionPrompt.includes("INSERT TELEMETRY") ||
+              interactionPrompt.includes("DIAGNOSTIC")
+            ) {
+              if (relayStore.getState().consoleUnlocked) {
+                relayStore.setActiveStationTab("diagnostic");
+                relayStore.setDiagnosticConsoleOpen(true);
+              } else {
+                telemetryStore.setTerminalOpen(true);
+              }
+            }
+          }}
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-30 px-5 py-2.5 bg-black/90 hover:bg-cyan-950/90 border-2 border-cyan-400 text-cyan-300 font-mono text-xs tracking-wider rounded-lg shadow-[0_0_25px_rgba(0,255,255,0.5)] cursor-pointer backdrop-blur-md flex items-center gap-2 animate-bounce transition-all pointer-events-auto"
+        >
+          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+          <span>{interactionPrompt}</span>
+          <span className="text-[10px] text-cyan-400/80 border border-cyan-500/40 px-1.5 py-0.5 rounded font-bold">
+            CLICK / [E]
+          </span>
+        </button>
       )}
 
       {/* ── Tactical Suit Equipment HUD (Bottom Bar: Only visible after Scene 1 & 2 complete) ───── */}
-      {scene1Complete && scene2Complete && isLocked && (
+      {scene1Complete && scene2Complete && isLocked && !terminalOpen && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-5 py-2 bg-black/80 border border-cyan-500/30 rounded-full font-mono text-xs backdrop-blur-md pointer-events-none shadow-[0_0_20px_rgba(0,255,255,0.15)]">
           <span
             className={`px-2 py-0.5 rounded text-[11px] font-bold ${
@@ -3180,7 +3751,7 @@ export default function Game() {
           </span>
           <span className="text-cyan-500/40">•</span>
           <span className="text-cyan-300/80 text-[11px]">
-            [E / F] PING SCANNER
+            [E] INTERACT  •  [F] PING SCANNER
           </span>
           <span className="text-cyan-500/40">•</span>
           <span className="text-cyan-300/80 text-[11px]">
@@ -3191,6 +3762,25 @@ export default function Game() {
 
       {/* ── Telemetry HUD ──────────────────────────────────────── */}
       <TelemetryHUD />
+
+      {/* ── Section 2: Relay Line Scanner HUD (Proximity Card, Radial Ring, Dialogue & Chips) ── */}
+      <RelayScannerHUD />
+
+      {/* ── Retro CRT Green Phosphor Terminal UI (Data Intake + Transmission Diagnostic) ──── */}
+      {(terminalOpen || diagnosticOpen) && (
+        <PendriveTerminal
+          open={terminalOpen || diagnosticOpen}
+          onClose={() => {
+            telemetryStore.setTerminalOpen(false);
+            relayStore.setDiagnosticConsoleOpen(false);
+            requestGameLock(true);
+          }}
+          onUpload={() => {
+            telemetryStore.evaluatePendriveData();
+          }}
+          reducedMotion={reduceMotion}
+        />
+      )}
     </div>
   );
 }
