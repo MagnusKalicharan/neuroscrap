@@ -19,7 +19,7 @@ export default function TerminalDevPage() {
 
   const { hasPendrive } = usePendriveStore();
 
-  const handleClose = (reason: "back" | "eject" | "uploaded") => {
+  const handleClose = (reason: "back" | "eject" | "uploaded" | "bias_rejected") => {
     setLastEvent(`Terminal Closed: [reason: ${reason}]`);
     setIsOpen(false);
   };

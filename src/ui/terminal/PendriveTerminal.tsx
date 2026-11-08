@@ -25,7 +25,7 @@ import { devSkipImagesAndUnlockSection2 } from "../../section2/section2Dev";
 
 export interface PendriveTerminalProps {
   open: boolean;
-  onClose: (reason: "back" | "eject" | "uploaded") => void;
+  onClose: (reason: "back" | "eject" | "uploaded" | "bias_rejected") => void;
   onUpload?: (batchId: string) => void;
   content?: {
     folders?: TerminalFolder[];
@@ -85,8 +85,9 @@ export function PendriveTerminal({
   const [announcement, setAnnouncement] = useState("");
 
   const imagesDone =
-    store.uploadedBatches.length > 0 ||
-    telemetry.analysisOutcome === "representative_sample";
+    (telemetry.analysisOutcome === "representative_sample" ||
+      store.uploadedBatches.includes("BATCH_DEV_AUTO")) &&
+    telemetry.analysisOutcome !== "sampling_bias";
 
   // Build Folder list: 4 slots total (Slot 1: "IMAGES", Slot 2: "TRANSMISSION", Slot 3: "AUDIO", Slot 4: null)
   const folderSlots = useMemo<FolderSlotDef[]>(() => {
@@ -354,13 +355,26 @@ export function PendriveTerminal({
     handleAnyKeyDown,
   ]);
 
-  const handleUploadComplete = () => {
+  const handleUploadComplete = useCallback(() => {
+    const outcome = telemetryStore.evaluatePendriveData();
+    if (outcome === "sampling_bias") {
+      terminalSound.playErrorBuzz();
+      setUploading(false);
+      const biasMsg = telemetryStore.getState().biasMessage;
+      // Per instructions: "if the sample is biased then the transmission should not unlock
+      // and the texts said by oracle shpuld not be said instead he should delete all scans and again take screenshots"
+      telemetryStore.purgeScansDueToBias(biasMsg || "Sampling bias detected.");
+      pendriveStore.reset();
+      onClose("bias_rejected");
+      return;
+    }
+
     const batchId = `BATCH_${Date.now()}`;
     pendriveStore.recordBatchUpload(batchId);
     onUpload?.(batchId);
     setUploading(false);
     onClose("uploaded");
-  };
+  }, [onUpload, onClose]);
 
   const handleDeleteImage = (id: string) => {
     pendriveStore.deleteImage(id);

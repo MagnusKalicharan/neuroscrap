@@ -245,6 +245,7 @@ export function MessageBody({
             onComplete={onUploadComplete}
             onCancel={onCancelUpload}
             reducedMotion={reducedMotion}
+            isBiased={analysisOutcome === "sampling_bias"}
           />
         )}
 

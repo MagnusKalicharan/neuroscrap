@@ -124,6 +124,10 @@ export const telemetryStore = {
     currentState = {
       ...currentState,
       scans: [...currentState.scans, newScan],
+      // If player was in a sampling_bias state, taking new scans clears old bias feedback
+      analysisOutcome: currentState.analysisOutcome === "sampling_bias" ? null : currentState.analysisOutcome,
+      biasMessage: currentState.analysisOutcome === "sampling_bias" ? null : currentState.biasMessage,
+      activeDialogueKey: currentState.activeDialogueKey === "bias_failure" ? null : currentState.activeDialogueKey,
     };
     notify();
     return true;
@@ -151,6 +155,22 @@ export const telemetryStore = {
       analysisOutcome: null,
       biasMessage: null,
       activeDialogueKey: null,
+      dialogueIndex: 0,
+    };
+    notify();
+  },
+
+  /**
+   * Purges/deletes all scans from the pendrive due to sampling bias,
+   * sets the analysis outcome and activates Oracle's bias failure dialogue.
+   */
+  purgeScansDueToBias(biasMessage: string) {
+    currentState = {
+      ...currentState,
+      scans: [],
+      analysisOutcome: "sampling_bias",
+      biasMessage,
+      activeDialogueKey: "bias_failure",
       dialogueIndex: 0,
     };
     notify();

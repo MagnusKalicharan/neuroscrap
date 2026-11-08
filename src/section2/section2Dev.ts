@@ -166,8 +166,15 @@ export const devSkipImagesAndUnlockSection2 = devJumpToSection2Transmission;
 export function isImagesValidated(): boolean {
   const pState = pendriveStore.getState();
   const tState = telemetryStore.getState();
+
+  // If sample was evaluated as biased, images are strictly NOT validated
+  if (tState.analysisOutcome === "sampling_bias") {
+    return false;
+  }
+
+  // Validated when representative sample is confirmed, or dev batch shortcut executed
   return (
-    pState.uploadedBatches.length > 0 ||
-    tState.analysisOutcome === "representative_sample"
+    tState.analysisOutcome === "representative_sample" ||
+    (pState.uploadedBatches.includes("BATCH_DEV_AUTO") && tState.analysisOutcome !== "sampling_bias")
   );
 }

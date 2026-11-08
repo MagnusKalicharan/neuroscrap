@@ -46,6 +46,7 @@ import {
   telemetryStore,
   type CelestialCategory,
 } from "./telemetry/telemetryStore";
+import { OracleBiasHUD } from "./telemetry/OracleBiasHUD";
 import { PendriveTerminal } from "../ui/terminal/PendriveTerminal";
 import { RelayInteractionManager } from "../section2/RelayInteractionManager";
 import { RelayScannerHUD } from "../section2/RelayScannerHUD";
@@ -3766,14 +3767,21 @@ export default function Game() {
       {/* ── Section 2: Relay Line Scanner HUD (Proximity Card, Radial Ring, Dialogue & Chips) ── */}
       <RelayScannerHUD />
 
+      {/* ── Oracle Sampling Bias Comms Dialogue (When Dataset Is Rejected & Purged) ──── */}
+      <OracleBiasHUD />
+
       {/* ── Retro CRT Green Phosphor Terminal UI (Data Intake + Transmission Diagnostic) ──── */}
       {(terminalOpen || diagnosticOpen) && (
         <PendriveTerminal
           open={terminalOpen || diagnosticOpen}
-          onClose={() => {
+          onClose={(reason) => {
             telemetryStore.setTerminalOpen(false);
             relayStore.setDiagnosticConsoleOpen(false);
             requestGameLock(true);
+            if (reason === "bias_rejected") {
+              setScanToast("⚠️ SAMPLING BIAS: Scans deleted by Oracle. Re-sample celestial targets!");
+              setTimeout(() => setScanToast(null), 4000);
+            }
           }}
           onUpload={() => {
             telemetryStore.evaluatePendriveData();
