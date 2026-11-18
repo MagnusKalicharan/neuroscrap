@@ -37,6 +37,7 @@ import { CockpitComputers } from "../../stations/computers";
 import { AntennaMesh } from "../../props/antenna/AntennaMesh";
 import { AntennaTerminalPedestal } from "../../props/antenna/AntennaTerminalPedestal";
 import { ANTENNA_WORLD_POS } from "../../props/antenna/antenna.config";
+import { Scrap06Unit } from "../../props/scrap06/Scrap06Unit";
 
 export { PLAYER_SPAWN, SHIP_POSITION, resolveShipCollisions, CableSystem, BrokenCables, SparkSystem, getCablePositions };
 export type { Aabb, ShipModel };
@@ -257,6 +258,12 @@ export function SpaceshipWreck({
         position={[2.0, 0.04, 12.8]}
         rotationY={0}
         isUnlocked={Boolean(isBeaconVerified || isSection3Passed)}
+      />
+
+      {/* ── 9. Abandoned Maintenance Unit SCRAP-06 (Cockpit Left-Hand Wall) ── */}
+      <Scrap06Unit
+        playerPositionRef={playerPositionRef}
+        reducedMotion={reducedMotion}
       />
     </group>
   );

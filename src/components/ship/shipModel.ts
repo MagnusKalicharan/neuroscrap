@@ -37,6 +37,9 @@ import {
   DOORS,
 } from "./layout";
 import { Aabb, resolveShipCollisions } from "./collision";
+import { DATA_STATION_COLLIDER } from "../../stations/dataStation/dataStation.config";
+import { COMPUTERS_CONFIG, PILOT_SEATS_CONFIG } from "../../stations/computers/computers.config";
+import { ANTENNA_WORLD_POS } from "../../props/antenna/antenna.config";
 
 export { PLAYER_SPAWN, SHIP_POSITION, resolveShipCollisions };
 export type { Aabb };
@@ -857,6 +860,20 @@ export function buildShipModel({
     [3, 1, 4]
   );
 
+  // Solid steel foundation plinth beneath the egress ramp (eliminates any hollow gap underneath)
+  box(
+    exterior,
+    egressRampW - 0.1,
+    1.15,
+    rampD - 0.1,
+    {
+      p: [(rampStartX + rampEndX) * 0.5, -0.78, rampZ],
+      r: [0, 0, -rampSlope],
+    },
+    0x2a313b,
+    [2, 1, 2]
+  );
+
   // Bold yellow/black hazard chevrons painted on the ramp surface
   for (let z = rampZ - 3.6; z <= rampZ + 3.6; z += 1.8) {
     box(
@@ -1131,7 +1148,88 @@ export function buildShipModel({
         maxZ: -38.4,
       });
     });
+  } else {
+    // Solid colliders for the Three Cockpit Computers (CORE-A, CORE-B, CORE-C)
+    (["coreA", "coreB", "coreC"] as const).forEach((key) => {
+      const cfg = COMPUTERS_CONFIG[key];
+      colliders.push({
+        id: cfg.id,
+        minX: cfg.collider.minX,
+        maxX: cfg.collider.maxX,
+        minZ: cfg.collider.minZ,
+        maxZ: cfg.collider.maxZ,
+        minY: cfg.collider.minY,
+        maxY: cfg.collider.maxY,
+      });
+    });
+
+    // Solid colliders for Cockpit Pilot Seats
+    PILOT_SEATS_CONFIG.forEach((seat) => {
+      const [sx, , sz] = seat.position;
+      colliders.push({
+        id: seat.id,
+        minX: sx - seat.width * 0.55,
+        maxX: sx + seat.width * 0.55,
+        minZ: sz - seat.depth * 0.55,
+        maxZ: sz + seat.depth * 0.55,
+        minY: 0.0,
+        maxY: seat.height + 0.2,
+      });
+    });
   }
+
+  // Solid collider for Crew Quarters 3D Data Station Console & Arch
+  colliders.push({
+    id: "data-station",
+    minX: DATA_STATION_COLLIDER.minX,
+    maxX: DATA_STATION_COLLIDER.maxX,
+    minZ: DATA_STATION_COLLIDER.minZ,
+    maxZ: DATA_STATION_COLLIDER.maxZ,
+    minY: DATA_STATION_COLLIDER.minY,
+    maxY: DATA_STATION_COLLIDER.maxY,
+  });
+
+  // Solid colliders for Cargo Bay Roof Comms Antenna Mast & Terminal Pedestal
+  colliders.push({
+    id: "antenna-mast",
+    minX: ANTENNA_WORLD_POS.x - 0.82,
+    maxX: ANTENNA_WORLD_POS.x + 0.82,
+    minZ: ANTENNA_WORLD_POS.z - 0.82,
+    maxZ: ANTENNA_WORLD_POS.z + 0.82,
+    minY: 0.0,
+    maxY: 11.0,
+  });
+  colliders.push({
+    id: "antenna-terminal-pedestal",
+    minX: 2.0 - 0.42,
+    maxX: 2.0 + 0.42,
+    minZ: 12.8 - 0.35,
+    maxZ: 12.8 + 0.35,
+    minY: 0.0,
+    maxY: 1.75,
+  });
+
+  // Solid collider for Engine Room Emergency Power Lever Console (x: 0, z: 31)
+  colliders.push({
+    id: "power-lever-console",
+    minX: -0.45,
+    maxX: 0.45,
+    minZ: 30.7,
+    maxZ: 31.3,
+    minY: 0.0,
+    maxY: 1.8,
+  });
+
+  // Solid collider for Abandoned Maintenance Robot SCRAP-06 (Cockpit port wall)
+  colliders.push({
+    id: "scrap-06",
+    minX: -11.0,
+    maxX: -10.18,
+    minZ: -39.18,
+    maxZ: -38.22,
+    minY: 0.0,
+    maxY: 1.0,
+  });
 
   // D) Cargo Bay Shipping Containers & Heavy Crates
   solid(interior, 3.2, 2.4, 5.0, [-4.5, 1.2, 14], 0.05, 0x9a4e28); // rust orange
@@ -1303,29 +1401,137 @@ export function buildShipModel({
     );
   });
 
+  // ── 11B. ARMORED LOWER HULL KEEL & GROUNDING SKIRT ────────────────────
+  // Extends the exterior hull perimeter from y = +0.08 down to y = -1.35 so the
+  // crashed starship sits solidly embedded in the alien regolith with zero gap underneath.
+  {
+    const keelColor = 0x2c333e;
+    const keelH = 1.42;
+    const keelY = -0.63; // spans y in [-1.34, +0.08]
+    const outerR = HULL_RADIUS + HULL_THICKNESS;
+
+    // Port longitudinal keel skirt (x = -outerR), split around Port Breach (z in [-14.2, -3.8])
+    // Forward port: z in [-40, -14.2]
+    box(exterior, 0.55, keelH, 25.8, { p: [-outerR + 0.15, keelY, -27.1] }, keelColor, [1, 1, 4]);
+    // Under Port Breach threshold: flush below deck (y in [-1.34, -0.28])
+    box(exterior, 0.55, 1.06, 10.6, { p: [-outerR + 0.15, -0.81, -9.0] }, keelColor, [1, 1, 2]);
+    // Aft port: z in [-3.8, 40]
+    box(exterior, 0.55, keelH, 43.8, { p: [-outerR + 0.15, keelY, 18.1] }, keelColor, [1, 1, 6]);
+
+    // Starboard longitudinal keel skirt (x = +outerR), split around Starboard Egress Ramp (z in [3.4, 12.6])
+    // Forward starboard: z in [-40, 3.4]
+    box(exterior, 0.55, keelH, 43.4, { p: [outerR - 0.15, keelY, -18.3] }, keelColor, [1, 1, 6]);
+    // Aft starboard: z in [12.6, 40]
+    box(exterior, 0.55, keelH, 27.4, { p: [outerR - 0.15, keelY, 26.3] }, keelColor, [1, 1, 4]);
+
+    // Cockpit Nose Dome elliptical lower keel collar (z in [-54.35, -40])
+    const noseSkirt = new THREE.CylinderGeometry(1, 1, keelH, 36, 1, true, Math.PI * 0.5, Math.PI);
+    noseSkirt.scale(outerR, 1, NOSE_LEN + HULL_THICKNESS);
+    noseSkirt.translate(0, keelY, -HULL_HALF_LEN);
+    exterior.add(paint(noseSkirt, keelColor, 0.05));
+
+    // Stern lower keel wall (z = +HULL_HALF_LEN) & engine bay ground skirt
+    box(exterior, outerR * 2, keelH, 0.7, { p: [0, keelY, HULL_HALF_LEN + HULL_THICKNESS * 0.5] }, keelColor, [4, 1, 1]);
+    box(exterior, HULL_RADIUS * 1.65, 2.6, 8.5, { p: [0, 0.0, HULL_HALF_LEN + 4.3] }, 0x353d48, [3, 1, 2]);
+  }
+
   // ── 12. EXTERIOR CRASH SITE & SCORCH TRAIL ────────────────────────────
   const wing = (
+    wingId: string,
     pts: [number, number][],
     y: number,
     droop: number,
     pivotX: number
   ) => {
+    const depth = 0.55;
     const shape = new THREE.Shape();
     shape.moveTo(pts[0][0], pts[0][1]);
     pts.slice(1).forEach(([x, z]) => shape.lineTo(x, z));
     const g = new THREE.ExtrudeGeometry(shape, {
-      depth: 0.55,
+      depth,
       bevelEnabled: false,
     });
     g.rotateX(Math.PI / 2);
-    g.translate(0, 0.55 + y, 0);
+    g.translate(0, depth + y, 0);
     g.translate(-pivotX, -y, 0);
     g.rotateZ(droop);
     g.translate(pivotX, y, 0);
     exterior.add(paint(g, 0x7a8492, 0.08));
+
+    // Generate tight sliced AABB colliders matching the exact swept wing polygon & droop slope
+    let polyMinX = Infinity;
+    let polyMaxX = -Infinity;
+    for (const [px] of pts) {
+      if (px < polyMinX) polyMinX = px;
+      if (px > polyMaxX) polyMaxX = px;
+    }
+
+    const sliceCount = Math.max(4, Math.ceil((polyMaxX - polyMinX) / 1.0));
+    const sliceW = (polyMaxX - polyMinX) / sliceCount;
+    const cosD = Math.cos(droop);
+    const sinD = Math.sin(droop);
+
+    for (let i = 0; i < sliceCount; i++) {
+      const sx0 = polyMinX + i * sliceW;
+      const sx1 = sx0 + sliceW;
+      const sxMid = (sx0 + sx1) * 0.5;
+
+      let zMin = Infinity;
+      let zMax = -Infinity;
+      const samples = [sx0, sxMid, sx1];
+
+      for (let e = 0; e < pts.length; e++) {
+        const [ax, az] = pts[e];
+        const [bx, bz] = pts[(e + 1) % pts.length];
+        if (ax >= sx0 && ax <= sx1) {
+          if (az < zMin) zMin = az;
+          if (az > zMax) zMax = az;
+        }
+        for (const sx of samples) {
+          if ((ax <= sx && bx >= sx) || (bx <= sx && ax >= sx)) {
+            const dxEdge = bx - ax;
+            if (Math.abs(dxEdge) > 1e-6) {
+              const t = (sx - ax) / dxEdge;
+              const zHit = az + t * (bz - az);
+              if (zHit < zMin) zMin = zHit;
+              if (zHit > zMax) zMax = zHit;
+            }
+          }
+        }
+      }
+
+      if (!Number.isFinite(zMin) || !Number.isFinite(zMax) || zMax - zMin < 0.05) continue;
+
+      let wMinX = Infinity;
+      let wMaxX = -Infinity;
+      let wMinY = Infinity;
+      let wMaxY = -Infinity;
+      for (const sx of [sx0, sx1]) {
+        const dx = sx - pivotX;
+        for (const dy of [0, depth]) {
+          const wx = pivotX + dx * cosD - dy * sinD;
+          const wy = y + dx * sinD + dy * cosD;
+          if (wx < wMinX) wMinX = wx;
+          if (wx > wMaxX) wMaxX = wx;
+          if (wy < wMinY) wMinY = wy;
+          if (wy > wMaxY) wMaxY = wy;
+        }
+      }
+
+      colliders.push({
+        id: `${wingId}-slice-${i}`,
+        minX: wMinX,
+        maxX: wMaxX,
+        minZ: zMin,
+        maxZ: zMax,
+        minY: wMinY - 0.15,
+        maxY: wMaxY + 0.15,
+      });
+    }
   };
 
   wing(
+    "wing-port",
     [
       [-10.8, -10],
       [-32, 8],
@@ -1337,6 +1543,7 @@ export function buildShipModel({
     -10.8
   );
   wing(
+    "wing-starboard",
     [
       [10.8, -10],
       [18, -4],

@@ -201,40 +201,46 @@ export function resolveShipCollisions(
     }
   }
 
-  // 4. AABB COLLIDERS (Props, Crates, Consoles, Bulkheads, Doors)
-  for (let i = 0; i < colliders.length; i++) {
-    const b = colliders[i];
+  // 4. AABB COLLIDERS (Props, Crates, Consoles, Relays, Cores, Antenna, Data Station, Bulkheads, Doors)
+  // Run 2 resolution passes so touching/corner-adjacent solid props never allow clipping.
+  const playerFeetY = playerY - 1.5;
+  const playerHeadY = playerY + 0.15;
 
-    // Skip open doors
-    if (b.isDoor && b.isOpen) continue;
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < colliders.length; i++) {
+      const b = colliders[i];
 
-    // Filter by Y axis if specified
-    if (b.minY !== undefined && b.maxY !== undefined) {
-      if (playerY < b.minY - 1.2 || playerY > b.maxY + 0.5) {
-        continue;
+      // Skip open doors
+      if (b.isDoor && b.isOpen) continue;
+
+      // Filter by vertical player capsule [playerFeetY, playerHeadY] vs [b.minY, b.maxY]
+      if (b.minY !== undefined && b.maxY !== undefined) {
+        if (playerHeadY <= b.minY || playerFeetY >= b.maxY) {
+          continue;
+        }
       }
-    }
 
-    const minX = b.minX - radius;
-    const maxX = b.maxX + radius;
-    const minZ = b.minZ - radius;
-    const maxZ = b.maxZ + radius;
+      const minX = b.minX - radius;
+      const maxX = b.maxX + radius;
+      const minZ = b.minZ - radius;
+      const maxZ = b.maxZ + radius;
 
-    if (x > minX && x < maxX && z > minZ && z < maxZ) {
-      const dl = x - minX;
-      const dr = maxX - x;
-      const df = z - minZ;
-      const db = maxZ - z;
-      const minOverlap = Math.min(dl, dr, df, db);
+      if (x > minX && x < maxX && z > minZ && z < maxZ) {
+        const dl = x - minX;
+        const dr = maxX - x;
+        const df = z - minZ;
+        const db = maxZ - z;
+        const minOverlap = Math.min(dl, dr, df, db);
 
-      if (minOverlap === dl) {
-        x = minX;
-      } else if (minOverlap === dr) {
-        x = maxX;
-      } else if (minOverlap === df) {
-        z = minZ;
-      } else {
-        z = maxZ;
+        if (minOverlap === dl) {
+          x = minX;
+        } else if (minOverlap === dr) {
+          x = maxX;
+        } else if (minOverlap === df) {
+          z = minZ;
+        } else {
+          z = maxZ;
+        }
       }
     }
   }

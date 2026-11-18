@@ -71,16 +71,35 @@ export function RelayInteractionManager({ collidersRef }: RelayInteractionManage
     [lineProps.scannedNodeIds]
   );
 
-  // Register Box Colliders (R1, R2, R3, R5, R6)
+  // Register Solid Box Colliders (R1, R2, R3, R5, R6, plus R4 once installed)
   useEffect(() => {
     if (!collidersRef) return;
     const nodeColliders = SECTION2_NODES.filter((n) => n.collider).map((n) => ({
-      ...n.collider,
+      ...n.collider!,
       id: `relay-node-${n.id}`,
     }));
 
-    // Append to shared colliders
-    collidersRef.current = [...(collidersRef.current || []), ...nodeColliders];
+    if (lineProps.diagnosticPassed) {
+      const r4 = SECTION2_NODES.find((n) => n.id === "R4");
+      if (r4) {
+        const [rx, , rz] = r4.position;
+        nodeColliders.push({
+          id: "relay-node-R4",
+          minX: rx - 0.45,
+          maxX: rx + 0.45,
+          minY: 0.0,
+          maxY: 0.85,
+          minZ: rz - 0.45,
+          maxZ: rz + 0.45,
+        });
+      }
+    }
+
+    // Replace any prior relay-node colliders cleanly (deduplicated)
+    const baseColliders = (collidersRef.current || []).filter(
+      (c) => !c.id?.startsWith("relay-node-")
+    );
+    collidersRef.current = [...baseColliders, ...nodeColliders];
 
     return () => {
       if (collidersRef.current) {
@@ -89,7 +108,7 @@ export function RelayInteractionManager({ collidersRef }: RelayInteractionManage
         );
       }
     };
-  }, [collidersRef]);
+  }, [collidersRef, lineProps.diagnosticPassed]);
 
   // Key listeners for [E] and [F]
   useEffect(() => {

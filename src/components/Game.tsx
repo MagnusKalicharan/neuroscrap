@@ -76,6 +76,13 @@ import { useSection4Store, section4Store } from "../section4/section4Store";
 import { PauseMenu } from "./PauseMenu";
 import { ScrapPauseMenu } from "./pause/ScrapPauseMenu";
 import { scene1Sound } from "../scenes/scene1/sound";
+import { SCRAP06_SCAN_TARGET } from "../props/scrap06/Scrap06Unit";
+import {
+  generateRegolithMaps,
+  generateBasaltRockTexture,
+  createCraggyRockGeometry,
+  AlienRockField,
+} from "./planet/AlienLandscape";
 
 // ============================================================
 // TUNABLE GAMEPLAY CONSTANTS
@@ -333,29 +340,61 @@ function createPRNG(seed: number) {
 // CONTINUOUS 3D TERRAIN HEIGHTMAP
 // Starship crash trench, lateral ejecta berms, alien dunes & 100% clean ship interior clearance
 // ============================================================
-export const TERRAIN_VERSION = 3;
+export const TERRAIN_VERSION = 6;
 
 export function getTerrainHeight(x: number, z: number): number {
   let height = 0;
 
-  // 1. Exterior landscape dunes & rolling regolith swells
-  height += Math.sin(x * 0.08) * Math.cos(z * 0.09) * 0.45;
-  height += Math.sin(x * 0.18 + z * 0.22) * 0.18;
-  height += Math.cos(x * 0.35 - z * 0.28) * 0.08;
+  // 1. Exterior landscape dunes, wind-carved ridges & rocky strata swells
+  height += Math.sin(x * 0.065) * Math.cos(z * 0.075) * 0.62;
+  height += (1.0 - Math.abs(Math.sin(x * 0.11 + z * 0.09))) * 0.42 - 0.18;
+  height += Math.sin(x * 0.18 + z * 0.22) * 0.22;
+  height += Math.cos(x * 0.35 - z * 0.28) * 0.10;
 
-  // 2. Starship Crash Furrow (deep trench along ship track)
+  // 1B. Natural Rimmed Impact Craters across exterior plains (strictly clear of ship & landing pad)
+  const craters: Array<[number, number, number, number]> = [
+    [34, -22, 11.5, 1.35],
+    [32, 28, 13.0, 1.55],
+    [-38, 30, 12.5, 1.45],
+    [-40, -38, 10.0, 1.15],
+  ];
+  for (let i = 0; i < craters.length; i++) {
+    const [cx, cz, cr, depth] = craters[i];
+    const d = Math.hypot(x - cx, z - cz);
+    if (d < cr * 1.45) {
+      const n = d / cr;
+      if (n < 1.0) {
+        // Depressed crater bowl
+        const bowl = 1.0 - n * n;
+        height -= bowl * depth;
+      }
+      // Raised rocky crater rim peaking around n = 1.0
+      const rim = Math.exp(-Math.pow((n - 1.02) / 0.22, 2));
+      height += rim * depth * 0.48;
+    }
+  }
+
+  // Smoothly flatten Rescue Saucer landing pad around [-23, -18] so dropship sits level
+  const dPad = Math.hypot(x - -23.0, z - -18.0);
+  if (dPad < 11.0) {
+    const padBlend = Math.min(1.0, Math.max(0.0, (dPad - 6.0) / 5.0));
+    const smoothPad = padBlend * padBlend * (3 - 2 * padBlend);
+    height = (1 - smoothPad) * -0.22 + smoothPad * height;
+  }
+
+  // 2. Starship Crash Furrow (realistic shallow impact groove along ship track)
   const inTrenchZ = z > -58 && z < 54;
   const trenchDistX = Math.abs(x);
 
   if (inTrenchZ && trenchDistX < 14.0) {
     const tf = 1.0 - trenchDistX / 14.0;
-    height -= tf * tf * 1.25;
+    height -= tf * tf * 0.42;
   }
 
-  // 3. Lateral Ejecta Berms (shattered regolith piled strictly OUTSIDE the hull, |x| >= 13.2)
-  if (inTrenchZ && trenchDistX >= 13.2 && trenchDistX <= 20.0) {
-    const bf = Math.sin(((trenchDistX - 13.2) / 6.8) * Math.PI);
-    height += bf * 0.75;
+  // 3. Lateral Ejecta Berms (shattered regolith piled strictly OUTSIDE the hull, |x| >= 13.0)
+  if (inTrenchZ && trenchDistX >= 13.0 && trenchDistX <= 20.0) {
+    const bf = Math.sin(((trenchDistX - 13.0) / 7.0) * Math.PI);
+    height += bf * 0.65;
   }
 
   // 4. Impact Crater Ridge behind engine cluster (z ~ 45..60)
@@ -366,39 +405,41 @@ export function getTerrainHeight(x: number, z: number): number {
   }
 
   // 5. STARBOARD EGRESS RAMP (Walkable transition directly out onto the planet)
-  // Metal gangway runs from x = 6.6 to x = 15.2, z in [2.0, 14.0]
+  // Metal gangway runs from x = 6.6 (y = 0.02) to x = 15.2 (y = -0.28), z in [2.0, 14.0]
   const isEgressZone = x >= 6.5 && x <= 16.5 && z >= 2.0 && z <= 14.0;
   if (isEgressZone) {
     if (x < 14.2) {
-      return -2.5; // Underneath the heavy steel loading ramp
+      return -0.52; // Snugly tucked directly beneath the steel loading ramp slab
     } else {
-      // Smoothly rises to meet the ramp end (-0.28m) and connects to planetary surface
+      // Smoothly meets the ramp end (-0.28m) and connects to planetary surface
       const t = Math.min(1, Math.max(0, (x - 14.2) / 2.3));
       return (1 - t) * -0.28 + t * height;
     }
   }
 
-  // 6. TOTAL SHIP INTERIOR VOID MASK (Strictly clear the entire ship volume down to -3.5m)
-  // Guarantees zero terrain polygons can ever touch or pierce the metal ship deck (y = 0.02)
+  // 6. SHIP INTERIOR FLOOR CLEARANCE MASK (Tucked cleanly at -0.55m right under the -0.33m deck slab)
+  // Prevents terrain polygons from poking through the interior deck while keeping exterior soil flush with the hull!
   if (z >= -56 && z <= 52) {
-    let halfW = 11.2;
+    let halfW = 11.0;
     if (z < -40) {
-      const normZ = (-40 - z) / 16.0;
+      const normZ = (-40 - z) / 15.0;
       if (normZ <= 1.0) {
-        halfW = 11.2 * Math.sqrt(Math.max(0, 1.0 - normZ * normZ));
+        halfW = 11.0 * Math.sqrt(Math.max(0, 1.0 - normZ * normZ));
       } else {
         halfW = 0;
       }
     }
 
     const distFromCenter = Math.abs(x);
-    if (distFromCenter <= halfW) {
-      // 100% inside the ship interior
-      return -3.5;
-    } else if (distFromCenter < halfW + 2.4) {
-      // Steep crash furrow wall immediately outside the hull
-      const blend = (distFromCenter - halfW) / 2.4;
-      return (1 - blend) * -3.5 + blend * height;
+    if (distFromCenter <= halfW - 0.2) {
+      // Strictly inside the ship hull: tucked cleanly 22cm below the metal floor slab bottom (-0.33m)
+      return -0.55;
+    } else if (distFromCenter < halfW + 1.4) {
+      // Tight, grounded transition right at the exterior hull skirt into surrounding regolith
+      const blend = (distFromCenter - (halfW - 0.2)) / 1.6;
+      const smooth = blend * blend * (3 - 2 * blend);
+      const outerSoil = Math.min(height, 0.05);
+      return (1 - smooth) * -0.55 + smooth * outerSoil;
     }
   }
 
@@ -845,6 +886,8 @@ let _scanFrameCount = 0;
 // ============================================================
 export const playerInputLocked = { current: false };
 
+const _toScrap06 = new THREE.Vector3();
+
 interface PlayerProps {
   isLocked: boolean;
   inputLocked?: boolean;
@@ -852,7 +895,7 @@ interface PlayerProps {
   isImagesDone?: boolean;
   flashlight: boolean;
   setFlashlight: React.Dispatch<React.SetStateAction<boolean>>;
-  triggerPing: () => void;
+  triggerPing: (pingLabel?: string) => void;
   setTargetInfo: React.Dispatch<React.SetStateAction<any>>;
   setSkyTarget: React.Dispatch<React.SetStateAction<CelestialTarget | null>>;
   onCaptureSkyScan: (target: CelestialTarget | null) => void;
@@ -935,6 +978,19 @@ function Player({
       const isImagesCompleted = isImagesDone || isImagesValidated();
       const isOutside = !isPlayerInsideShip(camera.position.x, camera.position.z);
       if (e.code === "KeyF") {
+        // Check if player is ping-scanning abandoned maintenance unit SCRAP-06
+        camera.getWorldDirection(_camFwd);
+        _toScrap06.copy(SCRAP06_SCAN_TARGET).sub(camera.position);
+        const scrapDist = _toScrap06.length();
+        const isAimingScrap06 =
+          scrapDist < 9.0 &&
+          (scrapDist < 1.2 || _toScrap06.normalize().dot(_camFwd) > 0.64);
+
+        if (isAimingScrap06) {
+          triggerPing("SCRAP-06 — POWER: NONE");
+          return;
+        }
+
         if (!isRelayTargeting && !isImagesCompleted) {
           if (!isOutside) {
             onCaptureSkyScan(null);
@@ -1409,7 +1465,9 @@ void main() {
     if (r > uSkyR && dot(pos, vel) > 0.0) { escaped = true; break; }
     if (transmit < 0.004) break;
 
-    float dt = clamp(0.14 * (r - 1.0), 0.025, 1.1);
+    float dt = (h > uDiskOut * 1.15)
+      ? clamp(0.32 * (r - 1.0), 0.25, 4.5)
+      : clamp(0.14 * (r - 1.0), 0.025, 1.1);
 
     if (r < uDiskOut * 1.25) {
       float rn = clamp((r - uDiskIn) / max(0.001, uDiskOut - uDiskIn), 0.0, 1.0);
@@ -1542,12 +1600,17 @@ const sharedSkyCamera = {
   hasChanged: true,
 };
 
-// Component inside R3F that updates the shared camera orientation every frame with fixed celestial alignment
+// Synchronous render trigger registered by useFullscreenBlackHoleSky so the sky renders
+// inside the EXACT SAME animation frame right after R3F finalizes the camera transform.
+let _renderBlackHoleSkyNow: ((now: number) => void) | null = null;
+
+// Component mounted LAST inside R3F <Canvas> so it reads the finalized current-frame camera
+// (after SmoothPointerLockControls & Player) and synchronously renders the BlackHole sky with 0-frame lag.
 function CameraSync() {
   const { camera } = useThree();
 
   useFrame(() => {
-    camera.updateMatrixWorld();
+    camera.updateMatrixWorld(true);
 
     // 1. Static rotation mapping fixed world vector towards Black Hole to shader camera target (Celestial infinite distance)
     _qAlignDynamic.setFromUnitVectors(BLACK_HOLE_WORLD_DIR, BH_SHADER_TARGET_DIR);
@@ -1578,11 +1641,22 @@ function CameraSync() {
     _sRight.copy(_camRight).applyQuaternion(_qAlignDynamic);
     _sUp.copy(_camUp).applyQuaternion(_qAlignDynamic);
 
-    // Track if camera view orientation changed significantly
+    const fov = (camera as THREE.PerspectiveCamera).fov ?? 75;
+    const nextTanHalf = Math.tan(THREE.MathUtils.degToRad(fov * 0.5));
+
+    // Track ANY camera view orientation change (tight epsilon eliminates slow temporal smear)
+    const eps = 1e-6;
     if (
-      Math.abs(sharedSkyCamera.fwd.x - _sFwd.x) > 0.0003 ||
-      Math.abs(sharedSkyCamera.fwd.y - _sFwd.y) > 0.0003 ||
-      Math.abs(sharedSkyCamera.fwd.z - _sFwd.z) > 0.0003
+      Math.abs(sharedSkyCamera.fwd.x - _sFwd.x) > eps ||
+      Math.abs(sharedSkyCamera.fwd.y - _sFwd.y) > eps ||
+      Math.abs(sharedSkyCamera.fwd.z - _sFwd.z) > eps ||
+      Math.abs(sharedSkyCamera.right.x - _sRight.x) > eps ||
+      Math.abs(sharedSkyCamera.right.y - _sRight.y) > eps ||
+      Math.abs(sharedSkyCamera.right.z - _sRight.z) > eps ||
+      Math.abs(sharedSkyCamera.up.x - _sUp.x) > eps ||
+      Math.abs(sharedSkyCamera.up.y - _sUp.y) > eps ||
+      Math.abs(sharedSkyCamera.up.z - _sUp.z) > eps ||
+      Math.abs(sharedSkyCamera.tanHalf - nextTanHalf) > eps
     ) {
       sharedSkyCamera.hasChanged = true;
     }
@@ -1591,8 +1665,10 @@ function CameraSync() {
     sharedSkyCamera.fwd.copy(_sFwd);
     sharedSkyCamera.right.copy(_sRight);
     sharedSkyCamera.up.copy(_sUp);
-    const fov = (camera as THREE.PerspectiveCamera).fov ?? 75;
-    sharedSkyCamera.tanHalf = Math.tan(THREE.MathUtils.degToRad(fov * 0.5));
+    sharedSkyCamera.tanHalf = nextTanHalf;
+
+    // 5. Synchronously render the fullscreen BlackHole sky for THIS EXACT frame before R3F draws 3D geometry
+    _renderBlackHoleSkyNow?.(performance.now());
   });
 
   return null;
@@ -1698,7 +1774,7 @@ function useFullscreenBlackHoleSky() {
       const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
       const cssW = window.innerWidth;
       const cssH = window.innerHeight;
-      const scale = 0.82; // High-definition render scale for razor-sharp accretion disk filaments
+      const scale = 0.72; // Crisp HD render scale balanced for instant 0-lag GPU frame pacing
       const w = Math.round(cssW * dpr);
       const h = Math.round(cssH * dpr);
       const sw = Math.round(w * scale);
@@ -1715,28 +1791,31 @@ function useFullscreenBlackHoleSky() {
       sceneTarget = makeTarget(sw, sh);
       targetA = makeTarget(sw, sh);
       targetB = makeTarget(sw, sh);
+      historyValid = false;
     }
 
-    resize();
-    window.addEventListener("resize", resize);
-
-    let rafId = 0;
     let clock = 0;
     let lastTime = performance.now();
     let settled = 0;
+    let historyValid = false;
+
+    resize();
+    window.addEventListener("resize", resize);
 
     const HALTON: Array<[number, number]> = [
       [0.5, 0.333], [0.25, 0.667], [0.75, 0.111], [0.125, 0.444],
       [0.625, 0.778], [0.375, 0.222], [0.875, 0.556], [0.0625, 0.889],
     ];
 
-    function loop(now: number) {
-      rafId = requestAnimationFrame(loop);
-      const dt = Math.min(0.05, (now - lastTime) / 1000);
+    function renderFrame(now: number) {
+      const dt = Math.min(0.05, Math.max(0, (now - lastTime) / 1000));
       lastTime = now;
       clock += dt;
 
       if (!sceneTarget || !targetA || !targetB) return;
+
+      const isMoving = sharedSkyCamera.hasChanged;
+      sharedSkyCamera.hasChanged = false;
 
       // 1. SCENE RAYMARCH PASS
       gl!.useProgram(sceneProg.prog);
@@ -1748,13 +1827,13 @@ function useFullscreenBlackHoleSky() {
       gl!.uniform1f(u.uTime!, clock);
       gl!.uniform3f(u.uCamPos!, BH_SHADER_CAM_POS.x, BH_SHADER_CAM_POS.y, BH_SHADER_CAM_POS.z);
 
-      // Driven in real-time by the Three.js first-person camera!
+      // Driven synchronously on the exact same frame by the Three.js first-person camera!
       gl!.uniform3f(u.uFwd!, sharedSkyCamera.fwd.x, sharedSkyCamera.fwd.y, sharedSkyCamera.fwd.z);
       gl!.uniform3f(u.uRight!, sharedSkyCamera.right.x, sharedSkyCamera.right.y, sharedSkyCamera.right.z);
       gl!.uniform3f(u.uUp!, sharedSkyCamera.up.x, sharedSkyCamera.up.y, sharedSkyCamera.up.z);
       gl!.uniform1f(u.uTanHalf!, sharedSkyCamera.tanHalf);
 
-      gl!.uniform1f(u.uSteps!, 240.0);
+      gl!.uniform1f(u.uSteps!, isMoving ? 144.0 : 220.0);
       gl!.uniform1f(u.uSkyR!, 45.0);
       gl!.uniform1f(u.uDiskIn!, 3.0);
       gl!.uniform1f(u.uDiskOut!, 15.0);
@@ -1770,37 +1849,47 @@ function useFullscreenBlackHoleSky() {
       gl!.uniform1f(u.uStars!, 1.0); // 3D gravitationally lensed stars
       gl!.uniform1f(u.uEncode!, 1.0);
 
-      const h = HALTON[settled % HALTON.length];
-      gl!.uniform2f(u.uJitter!, h[0] - 0.5, h[1] - 0.5);
-      gl!.uniform1f(u.uSeed!, (settled % 64) * 17.13);
+      if (isMoving) {
+        settled = 0;
+        historyValid = false;
+        gl!.uniform2f(u.uJitter!, 0.0, 0.0);
+        gl!.uniform1f(u.uSeed!, 0.0);
+      } else {
+        const h = HALTON[settled % HALTON.length];
+        gl!.uniform2f(u.uJitter!, h[0] - 0.5, h[1] - 0.5);
+        gl!.uniform1f(u.uSeed!, (settled % 64) * 17.13);
+      }
 
       gl!.drawArrays(gl!.TRIANGLES, 0, 3);
 
-      // 2. TEMPORAL ACCUMULATION PASS
-      // Uses 0.90 during active camera look to prevent ghosting, 0.40 when stationary for silky AA
-      const alpha = sharedSkyCamera.hasChanged ? 0.90 : 0.40;
-      sharedSkyCamera.hasChanged = false;
+      // 2. TEMPORAL ACCUMULATION PASS (skipped completely while rotating camera for 0 lag & 0 ghosting)
+      let compositeSourceTex = sceneTarget.tex;
+      if (!isMoving) {
+        const alpha = historyValid ? 0.35 : 1.0;
 
-      gl!.useProgram(blendProg.prog);
-      gl!.bindFramebuffer(gl!.FRAMEBUFFER, targetB.fb);
-      gl!.viewport(0, 0, sceneW, sceneH);
+        gl!.useProgram(blendProg.prog);
+        gl!.bindFramebuffer(gl!.FRAMEBUFFER, targetB.fb);
+        gl!.viewport(0, 0, sceneW, sceneH);
 
-      gl!.activeTexture(gl!.TEXTURE0);
-      gl!.bindTexture(gl!.TEXTURE_2D, sceneTarget.tex);
-      gl!.uniform1i(blendProg.u.uCur!, 0);
+        gl!.activeTexture(gl!.TEXTURE0);
+        gl!.bindTexture(gl!.TEXTURE_2D, sceneTarget.tex);
+        gl!.uniform1i(blendProg.u.uCur!, 0);
 
-      gl!.activeTexture(gl!.TEXTURE1);
-      gl!.bindTexture(gl!.TEXTURE_2D, targetA.tex);
-      gl!.uniform1i(blendProg.u.uPrev!, 1);
+        gl!.activeTexture(gl!.TEXTURE1);
+        gl!.bindTexture(gl!.TEXTURE_2D, targetA.tex);
+        gl!.uniform1i(blendProg.u.uPrev!, 1);
 
-      gl!.uniform1f(blendProg.u.uAlpha!, alpha);
-      gl!.drawArrays(gl!.TRIANGLES, 0, 3);
+        gl!.uniform1f(blendProg.u.uAlpha!, alpha);
+        gl!.drawArrays(gl!.TRIANGLES, 0, 3);
 
-      // Swap history targets
-      const tmp = targetA;
-      targetA = targetB;
-      targetB = tmp;
-      settled++;
+        // Swap history targets
+        const tmp = targetA;
+        targetA = targetB;
+        targetB = tmp;
+        historyValid = true;
+        settled++;
+        compositeSourceTex = targetA.tex;
+      }
 
       // 3. FULLSCREEN COMPOSITE PASS
       gl!.useProgram(compProg.prog);
@@ -1808,18 +1897,23 @@ function useFullscreenBlackHoleSky() {
       gl!.viewport(0, 0, width, height);
 
       gl!.activeTexture(gl!.TEXTURE0);
-      gl!.bindTexture(gl!.TEXTURE_2D, targetA.tex);
+      gl!.bindTexture(gl!.TEXTURE_2D, compositeSourceTex);
       gl!.uniform1i(compProg.u.uScene!, 0);
       gl!.uniform1f(compProg.u.uDecode!, 1.0);
       gl!.uniform1f(compProg.u.uExposure!, 1.05);
 
       gl!.drawArrays(gl!.TRIANGLES, 0, 3);
+      gl!.flush();
     }
 
-    rafId = requestAnimationFrame(loop);
+    _renderBlackHoleSkyNow = renderFrame;
+    // Paint one immediate initial frame before the first R3F tick
+    renderFrame(performance.now());
 
     return () => {
-      cancelAnimationFrame(rafId);
+      if (_renderBlackHoleSkyNow === renderFrame) {
+        _renderBlackHoleSkyNow = null;
+      }
       window.removeEventListener("resize", resize);
       if (vbo) gl.deleteBuffer(vbo);
       if (sceneTarget) { gl.deleteTexture(sceneTarget.tex); gl.deleteFramebuffer(sceneTarget.fb); }
@@ -2460,33 +2554,56 @@ function SonarPingWave({ pingTimestamp }: { pingTimestamp: number }) {
 }
 
 function PlanetSurface({ pingTimestamp }: { pingTimestamp: number }) {
-  const regolithTex = useMemo(() => generateRegolithTexture(), []);
+  const { map: regolithMap, bumpMap: regolithBump } = useMemo(
+    () => generateRegolithMaps(),
+    []
+  );
 
-  // Sculpted 3D Terrain Plane Geometry matching getTerrainHeight()
+  // Sculpted 3D Terrain Plane Geometry matching getTerrainHeight() + baked vertex tonal shading
   const terrainGeom = useMemo(() => {
-    const geom = new THREE.PlaneGeometry(160, 160, 128, 128);
+    const geom = new THREE.PlaneGeometry(260, 260, 160, 160);
     const pos = geom.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const c = new THREE.Color();
+
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const y = pos.getY(i); // Local Y becomes World -Z when rotated [-PI/2, 0, 0]
       const worldZ = -y;
       const h = getTerrainHeight(x, worldZ);
       pos.setZ(i, h);
+
+      // Natural elevation & furrow tonal variation (deep shadows in craters/furrow, weathered stone on ridges)
+      const hNorm = THREE.MathUtils.clamp((h + 1.2) / 3.8, 0, 1);
+      const inScorch = Math.abs(x) < 15.0 && worldZ > -56 && worldZ < 68;
+      const scorchFactor = inScorch ? 0.72 : 1.0;
+
+      // Dark obsidian-umber in hollows -> weathered slate-ochre on slopes -> subtle cool ridge rim
+      const r = (0.42 + hNorm * 0.44) * scorchFactor;
+      const g = (0.44 + hNorm * 0.44) * scorchFactor;
+      const b = (0.50 + hNorm * 0.48) * scorchFactor;
+      c.setRGB(r, g, b);
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
     }
+
+    geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     geom.computeVertexNormals();
     return geom;
   }, [TERRAIN_VERSION]);
 
   useEffect(() => {
     return () => {
-      regolithTex.dispose();
+      regolithMap.dispose();
+      regolithBump.dispose();
       terrainGeom.dispose();
     };
-  }, [regolithTex, terrainGeom]);
+  }, [regolithMap, regolithBump, terrainGeom]);
 
   return (
     <group>
-      {/* Sculpted 3D Alien Regolith Mesh */}
+      {/* Sculpted 3D Alien Regolith Mesh with Micro-Relief Bump Mapping & Baked Tonal Shading */}
       <mesh
         geometry={terrainGeom}
         rotation={[-Math.PI / 2, 0, 0]}
@@ -2494,12 +2611,18 @@ function PlanetSurface({ pingTimestamp }: { pingTimestamp: number }) {
         receiveShadow
       >
         <meshStandardMaterial
-          map={regolithTex}
-          roughness={0.92}
-          metalness={0.15}
-          color="#383d47"
+          map={regolithMap}
+          bumpMap={regolithBump}
+          bumpScale={0.38}
+          vertexColors
+          roughness={0.93}
+          metalness={0.14}
+          color="#a8b0be"
         />
       </mesh>
+
+      {/* Scattered Exterior Scree Stones & Stratified Desert Rock Outcrops */}
+      <AlienRockField getTerrainHeight={getTerrainHeight} />
 
       {/* Holographic Sonar Ping Wave */}
       <SonarPingWave pingTimestamp={pingTimestamp} />
@@ -2516,45 +2639,82 @@ function BasaltBoulders() {
     return WORLD_OBSTACLES.filter((o) => o.type === "stone");
   }, []);
 
+  const rockAssets = useMemo(() => {
+    const tex = generateBasaltRockTexture();
+    const monolithGeo = createCraggyRockGeometry(11.3, 2, false);
+    const slagGeo = createCraggyRockGeometry(27.9, 1, true);
+    const boulderGeo = createCraggyRockGeometry(53.4, 2, false);
+    const monolithMat = new THREE.MeshStandardMaterial({
+      map: tex,
+      bumpMap: tex,
+      bumpScale: 0.24,
+      color: "#4a5160",
+      roughness: 0.82,
+      metalness: 0.22,
+    });
+    const slagMat = new THREE.MeshStandardMaterial({
+      map: tex,
+      bumpMap: tex,
+      bumpScale: 0.28,
+      color: "#55504c",
+      roughness: 0.94,
+      metalness: 0.14,
+    });
+    const boulderMat = new THREE.MeshStandardMaterial({
+      map: tex,
+      bumpMap: tex,
+      bumpScale: 0.22,
+      color: "#606674",
+      roughness: 0.9,
+      metalness: 0.16,
+    });
+    return { tex, monolithGeo, slagGeo, boulderGeo, monolithMat, slagMat, boulderMat };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      rockAssets.tex.dispose();
+      rockAssets.monolithGeo.dispose();
+      rockAssets.slagGeo.dispose();
+      rockAssets.boulderGeo.dispose();
+      rockAssets.monolithMat.dispose();
+      rockAssets.slagMat.dispose();
+      rockAssets.boulderMat.dispose();
+    };
+  }, [rockAssets]);
+
   return (
     <group>
       {stones.map((b) => {
         const scale = b.scale || [1.5, 1.5, 1.5];
         const rot = b.rot || [0, 0, 0];
         const groundY = getTerrainHeight(b.x, b.z);
-        const stoneY = groundY + scale[1] * 0.42;
+        const stoneY = groundY + scale[1] * 0.36;
+
+        const geo =
+          b.stoneStyle === "monolith"
+            ? rockAssets.monolithGeo
+            : b.stoneStyle === "slag"
+            ? rockAssets.slagGeo
+            : rockAssets.boulderGeo;
+        const mat =
+          b.stoneStyle === "monolith"
+            ? rockAssets.monolithMat
+            : b.stoneStyle === "slag"
+            ? rockAssets.slagMat
+            : rockAssets.boulderMat;
 
         return (
           <group key={b.id} position={[b.x, stoneY, b.z]}>
-            {/* 1. Main Faceted Stone Geometry */}
-            {b.stoneStyle === "monolith" ? (
-              <mesh scale={scale} rotation={rot} castShadow receiveShadow>
-                <dodecahedronGeometry args={[1, 1]} />
-                <meshStandardMaterial
-                  color="#151821"
-                  roughness={0.68}
-                  metalness={0.32}
-                />
-              </mesh>
-            ) : b.stoneStyle === "slag" ? (
-              <mesh scale={scale} rotation={rot} castShadow receiveShadow>
-                <dodecahedronGeometry args={[1, 0]} />
-                <meshStandardMaterial
-                  color="#1f2026"
-                  roughness={0.92}
-                  metalness={0.18}
-                />
-              </mesh>
-            ) : (
-              <mesh scale={scale} rotation={rot} castShadow receiveShadow>
-                <icosahedronGeometry args={[1, 1]} />
-                <meshStandardMaterial
-                  color="#262b36"
-                  roughness={0.88}
-                  metalness={0.22}
-                />
-              </mesh>
-            )}
+            {/* 1. Main Craggy Stratified Basalt Rock Formation */}
+            <mesh
+              geometry={geo}
+              material={mat}
+              scale={scale}
+              rotation={rot}
+              castShadow
+              receiveShadow
+            />
 
             {/* 2. Embedded Alien Bioluminescent Xenolith Crystals */}
             {b.hasCrystal && (
@@ -3119,12 +3279,6 @@ function SpaceshipWreckScene({
 
       <directionalLight position={[35, 25, 40]} color="#4477aa" intensity={1.2} />
 
-      {/* Synchronizes the Three.js camera with the background Black Hole shader */}
-      <CameraSync />
-
-      {/* Unique Celestial Planetary System (Opposite side of the sky from the black hole) */}
-      <CelestialPlanetarySystem />
-
       {/* Fast, luminous shooting stars darting across the realistic night sky */}
       <ShootingStars />
 
@@ -3136,7 +3290,10 @@ function SpaceshipWreckScene({
       <SpaceshipWreck
         playerPositionRef={sharedPlayerPos as any}
         onReady={(model) => {
-          sharedShipColliders.current = model.colliders;
+          const existingRelays = (sharedShipColliders.current || []).filter(
+            (c) => c.id?.startsWith("relay-node-")
+          );
+          sharedShipColliders.current = [...model.colliders, ...existingRelays];
         }}
         onOpenCrewTerminal={onOpenCrewTerminal}
         onInteractionPrompt={onInteractionPrompt}
@@ -3178,7 +3335,7 @@ interface GameEngineControlsProps {
   setIsLocked: (locked: boolean) => void;
   flashlight: boolean;
   setFlashlight: React.Dispatch<React.SetStateAction<boolean>>;
-  triggerPing: () => void;
+  triggerPing: (pingLabel?: string) => void;
   setTargetInfo: React.Dispatch<React.SetStateAction<any>>;
   setSkyTarget: React.Dispatch<React.SetStateAction<CelestialTarget | null>>;
   onCaptureSkyScan: (target: CelestialTarget | null) => void;
@@ -3311,9 +3468,9 @@ function SmoothPointerLockControls({
       return;
     }
 
-    // 4. Sub-frame Exponential Decay Smoothing:
-    // Glides camera continuously, removing micro-stutter and polling jaggedness with zero perceived latency.
-    const smoothRate = 38.0;
+    // 4. Crisp Sub-frame Exponential Smoothing:
+    // Removes polling micro-stutter while tracking mouse motion virtually instantaneously.
+    const smoothRate = 75.0;
     const factor = 1.0 - Math.exp(-smoothRate * delta);
 
     currentYaw.current = THREE.MathUtils.lerp(currentYaw.current, targetYaw.current, factor);
@@ -3770,9 +3927,18 @@ export default function Game({ initialEnding = false }: { initialEnding?: boolea
   // Full-bleed raymarched general relativity black hole canvas
   const blackHoleCanvasRef = useFullscreenBlackHoleSky();
 
-  const triggerPing = useCallback(() => {
+  const pingToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerPing = useCallback((pingLabel?: string) => {
     playInteraction("scanner");
     setPingTimestamp(Date.now() / 1000);
+    if (pingLabel) {
+      if (pingToastTimerRef.current) clearTimeout(pingToastTimerRef.current);
+      setScanToast(pingLabel);
+      pingToastTimerRef.current = setTimeout(() => {
+        setScanToast(null);
+        pingToastTimerRef.current = null;
+      }, 4200);
+    }
   }, []);
 
   // Global Keydown listener for [E] when interaction prompt is active (e.g. at Data Station / Crew PC / Rescue Two)
@@ -3947,7 +4113,7 @@ export default function Game({ initialEnding = false }: { initialEnding?: boolea
         <Canvas
           dpr={[1, 1.5]}
           shadows
-          camera={{ fov: 75, near: 0.1, far: 280 }}
+          camera={{ fov: 75, near: 0.1, far: 420 }}
           gl={{
             antialias: true,
             alpha: true, // Transparent clear so the Black Hole Sky shines through
@@ -4017,6 +4183,9 @@ export default function Game({ initialEnding = false }: { initialEnding?: boolea
             {scene1Complete && !scene2Complete && (
               <Scene2Canvas reduceMotion={reduceMotion} />
             )}
+            {/* Mounted LAST so planets pin to finalized camera position and BlackHole sky renders synchronously on the EXACT same frame with 0-frame lag */}
+            <CelestialPlanetarySystem />
+            <CameraSync />
           </Suspense>
         </Canvas>
       </div>
