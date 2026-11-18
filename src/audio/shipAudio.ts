@@ -107,6 +107,8 @@ export class ShipAudioEngine {
   private reverbWetGainExterior: GainNode | null = null;
   private environmentFilter: BiquadFilterNode | null = null;
   private currentEnvAmount = 1.0; // 1.0 = deep interior, 0.0 = outer planet surface
+  private prePauseFreq = 9000;
+  private isPausedDucked = false;
 
   // Voice tracking & voice stealing
   private nextVoiceId = 1;
@@ -650,7 +652,8 @@ export class ShipAudioEngine {
   public setMasterVolume(v: number) {
     this.masterVol = Math.max(0, Math.min(1, v));
     if (this.masterGain && this.ctx && !this.isMutedState) {
-      this.masterGain.gain.linearRampToValueAtTime(this.masterVol, this.ctx.currentTime + 0.05);
+      const target = this.isPausedDucked ? Math.max(0.0001, this.masterVol * 0.25) : this.masterVol;
+      this.masterGain.gain.linearRampToValueAtTime(target, this.ctx.currentTime + 0.05);
     }
     this.persistSettings();
   }
@@ -662,7 +665,11 @@ export class ShipAudioEngine {
   public setMuted(muted: boolean) {
     this.isMutedState = muted;
     if (this.masterGain && this.ctx) {
-      const target = muted ? 0.0001 : this.masterVol;
+      const target = muted
+        ? 0.0001
+        : this.isPausedDucked
+        ? Math.max(0.0001, this.masterVol * 0.25)
+        : this.masterVol;
       this.masterGain.gain.linearRampToValueAtTime(target, this.ctx.currentTime + 0.08);
     }
     this.persistSettings();
@@ -670,6 +677,36 @@ export class ShipAudioEngine {
 
   public isMuted(): boolean {
     return this.isMutedState;
+  }
+
+  public getIsMuted(): boolean {
+    return this.isMutedState;
+  }
+
+  public setPausedDucked(paused: boolean) {
+    if (!this.ctx || !this.isInitialized) return;
+    this.isPausedDucked = paused;
+    const t = this.ctx.currentTime;
+    if (paused) {
+      if (this.masterGain && !this.isMutedState) {
+        this.masterGain.gain.cancelScheduledValues(t);
+        this.masterGain.gain.linearRampToValueAtTime(Math.max(0.0001, this.masterVol * 0.25), t + 0.15);
+      }
+      if (this.environmentFilter) {
+        this.prePauseFreq = this.environmentFilter.frequency.value || 9000;
+        this.environmentFilter.frequency.cancelScheduledValues(t);
+        this.environmentFilter.frequency.linearRampToValueAtTime(800, t + 0.15);
+      }
+    } else {
+      if (this.masterGain && !this.isMutedState) {
+        this.masterGain.gain.cancelScheduledValues(t);
+        this.masterGain.gain.linearRampToValueAtTime(this.masterVol, t + 0.15);
+      }
+      if (this.environmentFilter) {
+        this.environmentFilter.frequency.cancelScheduledValues(t);
+        this.environmentFilter.frequency.linearRampToValueAtTime(this.prePauseFreq || 9000, t + 0.15);
+      }
+    }
   }
 
   public setAmbienceVolume(v: number) {
@@ -753,7 +790,7 @@ export class ShipAudioEngine {
         if (item) {
           const s = JSON.parse(item);
           if (typeof s.master === "number") this.masterVol = s.master;
-          if (typeof s.ambience === "number") this.ambienceVol = Math.min(0.35, s.ambience);
+          if (typeof s.ambience === "number") this.ambienceVol = Math.max(0, Math.min(1, s.ambience));
           if (typeof s.sfx === "number") this.sfxVol = s.sfx;
           if (typeof s.muted === "boolean") this.isMutedState = s.muted;
         }

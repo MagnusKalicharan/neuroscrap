@@ -22,7 +22,6 @@ import React, {
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
-  PointerLockControls,
   Sparkles,
 } from "@react-three/drei";
 import * as THREE from "three";
@@ -51,14 +50,32 @@ import { PendriveTerminal } from "../ui/terminal/PendriveTerminal";
 import { RelayInteractionManager } from "../section2/RelayInteractionManager";
 import { RelayScannerHUD } from "../section2/RelayScannerHUD";
 import { relayStore, useRelayStore } from "../section2/relayStore";
+import { resetAllGameProgress } from "../utils/resetProgress";
 import {
   devResetAllProgressToStoryline,
   devJumpToSection2Transmission,
   devResetSection2Only,
   devSkipImagesAndUnlockSection2,
   isImagesValidated,
+  generateSampleSnapshot,
 } from "../section2/section2Dev";
 import { pendriveStore } from "../ui/terminal/pendriveStore";
+import { BenchTerminal } from "../section3/BenchTerminal";
+import { recordsFromScans } from "../section3/signals";
+import { Section3CommsHUD } from "../section3/Section3CommsHUD";
+import { devJumpToSection3 } from "../section3/section3Dev";
+import { useSection3Store, section3Store } from "../section3/section3Store";
+import { CommsTransceiverModal } from "../section3/CommsTransceiverModal";
+import { NeuralTerminal } from "../section4/NeuralTerminal";
+import { Section4CommsHUD } from "../section4/Section4CommsHUD";
+import { EscapeCutscene } from "./ending/EscapeCutscene";
+import { EndingCinematicInWorld } from "../ending/EndingCinematicInWorld";
+import { RescueShipMesh } from "../ending/ship/RescueShipMesh";
+import { endingState } from "../ending/endingState";
+import { useSection4Store, section4Store } from "../section4/section4Store";
+import { PauseMenu } from "./PauseMenu";
+import { ScrapPauseMenu } from "./pause/ScrapPauseMenu";
+import { scene1Sound } from "../scenes/scene1/sound";
 
 // ============================================================
 // TUNABLE GAMEPLAY CONSTANTS
@@ -71,22 +88,22 @@ export const WORLD_BOUNDS = 52.0;
 export const HEAD_BOB = true;
 export const PLAYER_RADIUS = 0.68;
 
-// Direction in Three.js world space where the Black Hole sits in the sky:
-// High in the sky, slightly to the left, rising majestically over the wreck
-const BLACK_HOLE_WORLD_DIR = new THREE.Vector3(-0.35, 0.55, -0.75).normalize();
+// Fixed 3D World Position of the Black Hole in space above the planet:
+// Anchored at a fixed physical location (-35% X, 55% Y, -75% Z at 200m distance),
+// so walking around the planet creates natural 3D parallax and never follows the camera!
+export const BH_BASE_DIST = 200.0;
+export const BLACK_HOLE_WORLD_DIR = new THREE.Vector3(-0.35, 0.55, -0.75).normalize();
+export const BH_WORLD_POS = new THREE.Vector3().copy(BLACK_HOLE_WORLD_DIR).multiplyScalar(BH_BASE_DIST);
 
 // Default camera vector in the Black Hole shader's local frame:
 // Camera sits at distance ~22.5 from the horizon, looking towards the singularity
 const BH_SHADER_CAM_POS = new THREE.Vector3(0, -4.2, 22.0);
 const BH_SHADER_TARGET_DIR = new THREE.Vector3().copy(BH_SHADER_CAM_POS).negate().normalize();
 
-// Quaternion aligning Three.js world space with the Black Hole shader space
-const Q_ALIGN_SKY = new THREE.Quaternion().setFromUnitVectors(
-  BLACK_HOLE_WORLD_DIR,
-  BH_SHADER_TARGET_DIR
-);
-
-// Scratch vectors for camera synchronization (allocated once to avoid GC pressure)
+// Scratch vectors for camera synchronization and dynamic parallax (allocated once to avoid GC pressure)
+const _toBH = new THREE.Vector3();
+const _curBHDir = new THREE.Vector3().copy(BLACK_HOLE_WORLD_DIR);
+const _qAlignDynamic = new THREE.Quaternion();
 const _camFwd = new THREE.Vector3();
 const _camRight = new THREE.Vector3();
 const _camUp = new THREE.Vector3();
@@ -119,7 +136,7 @@ export function getSkyCelestialTarget(forward: THREE.Vector3): CelestialTarget |
   const azimuthDeg = (Math.atan2(forward.x, forward.z) * (180 / Math.PI) + 360) % 360;
 
   // 1. Black Hole (Supermassive singularity with wide accretion disc)
-  if (forward.dot(BH_WORLD_DIR_VEC) > 0.82) {
+  if (forward.dot(BLACK_HOLE_WORLD_DIR) > 0.82) {
     return {
       name: "Black Hole",
       targetName: "Black Hole",
@@ -416,6 +433,32 @@ export function getWalkHeight(x: number, z: number, currentY = 1.5): number {
   return terrain;
 }
 
+/**
+ * Determines whether a given (x, z) world position is inside the enclosed spaceship wreck.
+ * Returns true if inside the cockpit or main hull interior, and false if outside on the regolith/dunes.
+ */
+export function isPlayerInsideShip(x: number, z: number): boolean {
+  // 1. Cockpit dome forward section (z between -54 and -40)
+  if (z >= -54 && z < -40) {
+    return Math.pow(x / 8.5, 2) + Math.pow((-40 - z) / 14.0, 2) <= 1.0;
+  }
+  // 2. Main hull fuselage / corridor (z between -40 and 38)
+  if (z >= -40 && z <= 38) {
+    // Port breach egress: outside when stepped out onto regolith (x <= -7.2)
+    if (x <= -7.2 && z >= -18 && z <= 2) {
+      return false; // OUTSIDE on port dunes
+    }
+    // Starboard egress ramp: outside when stepped off ramp onto dunes (x >= 12.0)
+    if (x >= 12.0 && z >= 1.0 && z <= 15.0) {
+      return false; // OUTSIDE on starboard dunes
+    }
+    // Main enclosed hull width is |x| <= 6.8
+    return Math.abs(x) <= 6.8;
+  }
+  // Everywhere else (z < -54, z > 38, |x| > 6.8) is outside on the alien planet!
+  return false;
+}
+
 // ============================================================
 // WORLD OBSTACLES & COLLISION REGISTRY
 // High-precision physical colliders for Stones, Wreckage & Crates
@@ -448,6 +491,8 @@ function buildWorldObstacles(): WorldObstacle[] {
     if (Math.abs(x) < 14.0 && z > -56 && z < 52) continue;
     // Clear the starboard egress ramp exit path
     if (x >= 6.0 && x <= 24.0 && z >= 0 && z <= 16) continue;
+    // Clear Rescue Two landing zone and viewing corridor on the left dunes
+    if (x <= -12.0 && x >= -45.0 && z >= -38.0 && z <= 16.0) continue;
 
     const scaleX = 0.8 + rng() * 2.5;
     const scaleY = 0.6 + rng() * 3.4;
@@ -810,7 +855,7 @@ interface PlayerProps {
   triggerPing: () => void;
   setTargetInfo: React.Dispatch<React.SetStateAction<any>>;
   setSkyTarget: React.Dispatch<React.SetStateAction<CelestialTarget | null>>;
-  onCaptureSkyScan: (target: CelestialTarget) => void;
+  onCaptureSkyScan: (target: CelestialTarget | null) => void;
 }
 
 function Player({
@@ -838,6 +883,13 @@ function Player({
     if (typeof window !== "undefined") {
       (window as any).__threeCamera = camera;
       const params = new URLSearchParams(window.location.search);
+      if (params.get("section") === "3") {
+        camera.position.set(0, 1.5, -42.0);
+        camera.lookAt(0, 1.5, -45.5);
+        camera.rotation.order = "YXZ";
+        camera.rotation.z = 0;
+        return;
+      }
       const cx = params.get("camX");
       const cy = params.get("camY");
       const cz = params.get("camZ");
@@ -881,14 +933,23 @@ function Player({
       }
       const isRelayTargeting = Boolean(relayStore.getState().activeTargetNodeId);
       const isImagesCompleted = isImagesDone || isImagesValidated();
+      const isOutside = !isPlayerInsideShip(camera.position.x, camera.position.z);
       if (e.code === "KeyF") {
         if (!isRelayTargeting && !isImagesCompleted) {
-          onCaptureSkyScan(currentSkyTargetRef.current as any);
+          if (!isOutside) {
+            onCaptureSkyScan(null);
+          } else if (currentSkyTargetRef.current) {
+            onCaptureSkyScan(currentSkyTargetRef.current as any);
+          }
         }
         triggerPing();
       } else if (e.code === "KeyE") {
-        if (!hasActivePrompt && !isRelayTargeting && !isImagesCompleted && currentSkyTargetRef.current) {
-          onCaptureSkyScan(currentSkyTargetRef.current as any);
+        if (!hasActivePrompt && !isRelayTargeting && !isImagesCompleted) {
+          if (!isOutside) {
+            onCaptureSkyScan(null);
+          } else if (currentSkyTargetRef.current) {
+            onCaptureSkyScan(currentSkyTargetRef.current as any);
+          }
         }
         // Note: Key [E] is strictly for interaction. Do not invoke triggerPing() here.
       }
@@ -1030,8 +1091,12 @@ function Player({
       spotLightRef.current.target = spotTargetRef.current;
     }
 
-    // 6. TACTICAL TARGET SCANNER RAY (Only active during Section 1 Celestial Sky Photography)
-    if (!isImagesDone && !isImagesValidated()) {
+    // 6. TACTICAL TARGET SCANNER RAY
+    // Strictly active ONLY when OUTSIDE on planetary surface and Section 1 is not complete!
+    const isOutside = !isPlayerInsideShip(camera.position.x, camera.position.z);
+    const isSection1Active = !isImagesDone && !isImagesValidated();
+
+    if (isSection1Active && isOutside) {
       _scanFrameCount++;
       if (_scanFrameCount % 4 === 0) {
         camera.getWorldDirection(_camFwd);
@@ -1477,13 +1542,17 @@ const sharedSkyCamera = {
   hasChanged: true,
 };
 
-// Component inside R3F that updates the shared camera orientation every frame
+// Component inside R3F that updates the shared camera orientation every frame with fixed celestial alignment
 function CameraSync() {
   const { camera } = useThree();
 
   useFrame(() => {
-    // 1. Get current Three.js first-person camera orientation directly from matrixWorld
     camera.updateMatrixWorld();
+
+    // 1. Static rotation mapping fixed world vector towards Black Hole to shader camera target (Celestial infinite distance)
+    _qAlignDynamic.setFromUnitVectors(BLACK_HOLE_WORLD_DIR, BH_SHADER_TARGET_DIR);
+
+    // 2. Get current Three.js first-person camera orientation directly from matrixWorld
     _camRight.set(
       camera.matrixWorld.elements[0],
       camera.matrixWorld.elements[1],
@@ -1504,10 +1573,10 @@ function CameraSync() {
     if (_camUp.lengthSq() < 0.001) _camUp.set(0, 1, 0); else _camUp.normalize();
     if (_camFwd.lengthSq() < 0.001) _camFwd.set(0, 0, -1); else _camFwd.normalize();
 
-    // 2. Rotate into the Black Hole's celestial frame
-    _sFwd.copy(_camFwd).applyQuaternion(Q_ALIGN_SKY);
-    _sRight.copy(_camRight).applyQuaternion(Q_ALIGN_SKY);
-    _sUp.copy(_camUp).applyQuaternion(Q_ALIGN_SKY);
+    // 3. Rotate camera orientation into the fixed celestial frame
+    _sFwd.copy(_camFwd).applyQuaternion(_qAlignDynamic);
+    _sRight.copy(_camRight).applyQuaternion(_qAlignDynamic);
+    _sUp.copy(_camUp).applyQuaternion(_qAlignDynamic);
 
     // Track if camera view orientation changed significantly
     if (
@@ -1518,7 +1587,7 @@ function CameraSync() {
       sharedSkyCamera.hasChanged = true;
     }
 
-    // 3. Write to shared object
+    // 4. Write to shared object with constant celestial scale (NO distance distortion on movement)
     sharedSkyCamera.fwd.copy(_sFwd);
     sharedSkyCamera.right.copy(_sRight);
     sharedSkyCamera.up.copy(_sUp);
@@ -1790,6 +1859,7 @@ interface ShootingStarSim {
 }
 
 function ShootingStars() {
+  const { camera } = useThree();
   const rng = useMemo(() => createPRNG(431), []);
   const groupRef = useRef<THREE.Group>(null);
   const starsRef = useRef<ShootingStarSim[]>([]);
@@ -1920,7 +1990,10 @@ function ShootingStars() {
     };
   }, [resetStar]);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
+    if (groupRef.current) {
+      groupRef.current.position.copy(state.camera.position);
+    }
     const list = starsRef.current;
     if (!list || list.length === 0) return;
 
@@ -2242,11 +2315,12 @@ function CelestialPlanetarySystem() {
     };
   }, [gasGiantTex, ringTex, magmaTex, oceanTex]);
 
-  useFrame((_, delta) => {
-    // 1. PIN TO CAMERA POSITION: The planetary system follows camera translation,
-    // so walking towards them NEVER changes their distance or size! (Celestial infinite distance)
+  useFrame((state, delta) => {
+    // 1. PIN TO CAMERA POSITION (Celestial infinite distance):
+    // Syncs with camera translation at priority 1 (after player controls update) so walking towards them NEVER changes their distance or size!
     if (systemGroupRef.current) {
-      systemGroupRef.current.position.copy(camera.position);
+      systemGroupRef.current.position.copy(state.camera.position);
+      systemGroupRef.current.updateMatrixWorld(true);
     }
 
     // 2. CLEAR VISIBLE ROTATION: Clouds, Great Storm Spot, lava rifts, and ocean spirals turn!
@@ -2960,6 +3034,51 @@ interface SpaceshipWreckSceneProps {
   onOpenCrewTerminal?: () => void;
   onInteractionPrompt?: (prompt: string | null) => void;
   onInputLocked?: (locked: boolean) => void;
+  isSection3Unlocked?: boolean;
+  isSection3Passed?: boolean;
+  isBeaconVerified?: boolean;
+  onOpenSection3?: () => void;
+  onOpenTransceiver?: () => void;
+  onOpenAntennaCore?: () => void;
+  isEndingActive?: boolean;
+  endingElapsedTime?: number;
+  reducedMotion?: boolean;
+  hasUfoLanded?: boolean;
+  onTouchdownComplete?: () => void;
+}
+
+function LandedRescueSaucer({
+  onInteractionPrompt,
+}: {
+  onInteractionPrompt?: (prompt: string | null) => void;
+}) {
+  const RAMP_TIP_X = -22.02;
+  const RAMP_TIP_Z = -17.51;
+  const groundY = getTerrainHeight(-23.0, -18.0);
+  const saucerY = groundY + 14.0 * 0.14;
+
+  useFrame(() => {
+    if (!onInteractionPrompt) return;
+    const playerX = sharedPlayerPos.current.x;
+    const playerZ = sharedPlayerPos.current.z;
+    const dist = Math.hypot(playerX - RAMP_TIP_X, playerZ - RAMP_TIP_Z);
+    if (dist < 5.0) {
+      onInteractionPrompt("[E] BOARD RESCUE TWO");
+    }
+  });
+
+  return (
+    <RescueShipMesh
+      position={[-23.0, saucerY, -18.0]}
+      rotation={[0, 1.107, 0]}
+      scale={0.14}
+      gearDeploy={1.0}
+      rampDeploy={1.0}
+      engineThrust={0.0}
+      searchlightPitch={0.0}
+      searchlightYaw={0}
+    />
+  );
 }
 
 function SpaceshipWreckScene({
@@ -2967,6 +3086,17 @@ function SpaceshipWreckScene({
   onOpenCrewTerminal,
   onInteractionPrompt,
   onInputLocked,
+  isSection3Unlocked = false,
+  isSection3Passed = false,
+  isBeaconVerified = false,
+  onOpenSection3,
+  onOpenTransceiver,
+  onOpenAntennaCore,
+  isEndingActive = false,
+  endingElapsedTime = 0,
+  reducedMotion = false,
+  hasUfoLanded = false,
+  onTouchdownComplete,
 }: SpaceshipWreckSceneProps) {
   return (
     <>
@@ -3011,9 +3141,26 @@ function SpaceshipWreckScene({
         onOpenCrewTerminal={onOpenCrewTerminal}
         onInteractionPrompt={onInteractionPrompt}
         onInputLocked={onInputLocked}
+        isSection3Unlocked={isSection3Unlocked}
+        isSection3Passed={isSection3Passed}
+        isBeaconVerified={isBeaconVerified}
+        onOpenSection3={onOpenSection3}
+        onOpenTransceiver={onOpenTransceiver}
+        onOpenAntennaCore={onOpenAntennaCore}
       />
       <EngineCoolantVentPlume />
       <CosmicDust />
+
+      {/* ── Active Ending Cinematic: Real Antenna Beam, Saucer Landing on Planet ── */}
+      {isEndingActive ? (
+        <EndingCinematicInWorld
+          elapsedTime={endingElapsedTime}
+          reducedMotion={reducedMotion}
+          onTouchdownComplete={onTouchdownComplete}
+        />
+      ) : hasUfoLanded ? (
+        <LandedRescueSaucer onInteractionPrompt={onInteractionPrompt} />
+      ) : null}
     </>
   );
 }
@@ -3023,6 +3170,7 @@ function SpaceshipWreckScene({
 // ============================================================
 interface GameEngineControlsProps {
   isLocked: boolean;
+  mouseSensitivity?: number;
   inputLocked?: boolean;
   terminalOpen?: boolean;
   hasActivePrompt?: boolean;
@@ -3033,11 +3181,153 @@ interface GameEngineControlsProps {
   triggerPing: () => void;
   setTargetInfo: React.Dispatch<React.SetStateAction<any>>;
   setSkyTarget: React.Dispatch<React.SetStateAction<CelestialTarget | null>>;
-  onCaptureSkyScan: (target: CelestialTarget) => void;
+  onCaptureSkyScan: (target: CelestialTarget | null) => void;
+}
+
+// ============================================================
+// SMOOTH TACTICAL POINTER-LOCK CONTROLLER
+// ============================================================
+// Solves:
+// 1. Windows Chromium pointer lock edge re-centering jump glitch
+//    (sudden 150-800px delta spikes when pointer hits virtual bounds).
+// 2. High sensitivity / jumpiness on small mouse movements.
+// 3. Sub-frame exponential smoothing for silky 60-144 FPS camera motion.
+// 4. Zenith/nadir singularity protection (prevents gimbal flip at +/- 90°).
+interface SmoothPointerLockControlsProps {
+  selector?: string;
+  enabled?: boolean;
+  isLocked: boolean;
+  mouseSensitivity?: number;
+  onLock?: () => void;
+  onUnlock?: () => void;
+}
+
+function SmoothPointerLockControls({
+  selector = "#three-canvas-container",
+  enabled = true,
+  isLocked,
+  mouseSensitivity = 1.0,
+  onLock,
+  onUnlock,
+}: SmoothPointerLockControlsProps) {
+  const { camera, gl } = useThree();
+
+  const targetYaw = useRef(camera.rotation.y);
+  const targetPitch = useRef(camera.rotation.x);
+  const currentYaw = useRef(camera.rotation.y);
+  const currentPitch = useRef(camera.rotation.x);
+
+  const syncWithCamera = useCallback(() => {
+    camera.rotation.order = "YXZ";
+    camera.rotation.z = 0;
+    targetYaw.current = camera.rotation.y;
+    currentYaw.current = camera.rotation.y;
+    targetPitch.current = camera.rotation.x;
+    currentPitch.current = camera.rotation.x;
+  }, [camera]);
+
+  useEffect(() => {
+    syncWithCamera();
+  }, [syncWithCamera]);
+
+  useEffect(() => {
+    syncWithCamera();
+  }, [isLocked, syncWithCamera]);
+
+  useEffect(() => {
+    const domElement = (selector ? document.querySelector(selector) : gl.domElement) as HTMLElement | null;
+    const targetElement = domElement || gl.domElement;
+
+    const handlePointerDown = () => {
+      if (!enabled) return;
+      if (document.pointerLockElement) return;
+      try {
+        const promise = targetElement.requestPointerLock?.() as any;
+        if (promise && typeof promise.catch === "function") {
+          promise.catch(() => {});
+        }
+      } catch {}
+    };
+
+    const handlePointerLockChange = () => {
+      const activeElement = document.pointerLockElement;
+      const locked = Boolean(
+        activeElement &&
+        (activeElement === targetElement ||
+         activeElement === gl.domElement ||
+         targetElement.contains(activeElement))
+      );
+      if (locked) {
+        syncWithCamera();
+        onLock?.();
+      } else {
+        syncWithCamera();
+        onUnlock?.();
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isLocked || !enabled) return;
+
+      const rawX = e.movementX || (e as any).mozMovementX || (e as any).webkitMovementX || 0;
+      const rawY = e.movementY || (e as any).mozMovementY || (e as any).webkitMovementY || 0;
+
+      // 1. Anti-Jump Glitch Filter:
+      // Clamps delta to 75px per event. Prevents the 200-800px edge recentering teleport bug
+      // while cleanly accommodating natural rapid mouse flicks.
+      const MAX_DELTA = 75;
+      const clampedX = Math.max(-MAX_DELTA, Math.min(MAX_DELTA, rawX));
+      const clampedY = Math.max(-MAX_DELTA, Math.min(MAX_DELTA, rawY));
+
+      // 2. Calibrated Tactical Sensitivity (multiplied by user preference):
+      // 0.0010 rad/px provides a calm, accurate, buttery smooth baseline feel.
+      const SENSITIVITY = 0.0010 * mouseSensitivity;
+
+      targetYaw.current -= clampedX * SENSITIVITY;
+      targetPitch.current -= clampedY * SENSITIVITY;
+
+      // 3. Strict vertical pitch clamp (~86.5°) preventing gimbal singularity & view inversion
+      const PITCH_LIMIT = Math.PI / 2 - 0.06;
+      targetPitch.current = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, targetPitch.current));
+    };
+
+    targetElement.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("pointerlockchange", handlePointerLockChange);
+    document.addEventListener("mousemove", handleMouseMove);
+
+    return () => {
+      targetElement.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("pointerlockchange", handlePointerLockChange);
+      document.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, [enabled, gl.domElement, isLocked, mouseSensitivity, onLock, onUnlock, selector, syncWithCamera]);
+
+  useFrame((_, delta) => {
+    if (!isLocked) {
+      targetYaw.current = camera.rotation.y;
+      currentYaw.current = camera.rotation.y;
+      targetPitch.current = camera.rotation.x;
+      currentPitch.current = camera.rotation.x;
+      return;
+    }
+
+    // 4. Sub-frame Exponential Decay Smoothing:
+    // Glides camera continuously, removing micro-stutter and polling jaggedness with zero perceived latency.
+    const smoothRate = 38.0;
+    const factor = 1.0 - Math.exp(-smoothRate * delta);
+
+    currentYaw.current = THREE.MathUtils.lerp(currentYaw.current, targetYaw.current, factor);
+    currentPitch.current = THREE.MathUtils.lerp(currentPitch.current, targetPitch.current, factor);
+
+    camera.rotation.set(currentPitch.current, currentYaw.current, 0, "YXZ");
+  });
+
+  return null;
 }
 
 function GameEngineControls({
   isLocked,
+  mouseSensitivity = 1.0,
   inputLocked = false,
   terminalOpen = false,
   hasActivePrompt = false,
@@ -3050,7 +3340,6 @@ function GameEngineControls({
   setSkyTarget,
   onCaptureSkyScan,
 }: GameEngineControlsProps) {
-  const controlsRef = useRef<any>(null);
   const { camera } = useThree();
 
   const handleLock = useCallback(() => {
@@ -3068,10 +3357,11 @@ function GameEngineControls({
 
   return (
     <>
-      <PointerLockControls
-        ref={controlsRef}
+      <SmoothPointerLockControls
         selector="#three-canvas-container"
         enabled={!terminalOpen}
+        isLocked={isLocked}
+        mouseSensitivity={mouseSensitivity}
         onLock={handleLock}
         onUnlock={handleUnlock}
       />
@@ -3142,7 +3432,7 @@ function TelemetryHUD() {
 // ============================================================
 // MAIN FIRST-PERSON 3D GAME EXPORT
 // ============================================================
-export default function Game() {
+export default function Game({ initialEnding = false }: { initialEnding?: boolean } = {}) {
   const router = useRouter();
   const [isLocked, setIsLocked] = useState(false);
   const [flashlight, setFlashlight] = useState(false);
@@ -3154,9 +3444,102 @@ export default function Game() {
     description: string;
   } | null>(null);
 
+  // ── Game Settings State (Mouse Look Sensitivity & Audio Volume) ──
+  const [mouseSensitivity, setMouseSensitivity] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("neuroscrap_mouse_sens");
+      if (saved) {
+        const val = parseFloat(saved);
+        if (!isNaN(val) && val >= 0.2 && val <= 3.0) return val;
+      }
+    }
+    return 1.0;
+  });
+
+  const handleSensitivityChange = useCallback((val: number) => {
+    setMouseSensitivity(val);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("neuroscrap_mouse_sens", val.toString());
+    }
+  }, []);
+
+  const [masterVolume, setMasterVolumeState] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("scene1_audio_volume");
+      if (saved) {
+        const val = parseFloat(saved);
+        if (!isNaN(val)) return Math.round(val * 100);
+      }
+    }
+    return 80;
+  });
+
+  const [isMuted, setIsMutedState] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("scene1_audio_muted") === "true";
+    }
+    return false;
+  });
+
+  const handleVolumeChange = useCallback(
+    (volPercent: number) => {
+      setMasterVolumeState(volPercent);
+      const v = volPercent / 100;
+      shipAudio.setMasterVolume(v);
+      scene1Sound.setVolume(v);
+      if (volPercent > 0 && isMuted) {
+        setIsMutedState(false);
+        shipAudio.setMuted(false);
+        scene1Sound.setMuted(false);
+        try {
+          localStorage.setItem("scene1_audio_muted", "false");
+        } catch {}
+      }
+    },
+    [isMuted]
+  );
+
+  const handleToggleMute = useCallback(
+    (explicitMuted?: boolean) => {
+      const next = typeof explicitMuted === "boolean" ? explicitMuted : !isMuted;
+      setIsMutedState(next);
+      shipAudio.setMuted(next);
+      scene1Sound.setMuted(next);
+      try {
+        localStorage.setItem("scene1_audio_muted", next ? "true" : "false");
+      } catch {}
+    },
+    [isMuted]
+  );
+
   // Physical Telemetry Pendrive & Crew Terminal State
   const { scans, maxScans, terminalOpen } = useTelemetryStore();
   const relayStoreState = useRelayStore();
+  const s3State = useSection3Store();
+  const [section3Open, setSection3Open] = useState(false);
+  const [transceiverOpen, setTransceiverOpen] = useState(false);
+  const [section4Open, setSection4Open] = useState(false);
+
+  const s4State = useSection4Store();
+  const [endingCutsceneActive, setEndingCutsceneActive] = useState(initialEnding);
+  const [endingElapsed, setEndingElapsed] = useState(0);
+  const [hasUfoLanded, setHasUfoLanded] = useState(false);
+  const [victoryRecapOpen, setVictoryRecapOpen] = useState(false);
+  const isSection4Done = Boolean(s4State.labState.isComplete);
+
+  const [isEndingPlayerControl, setIsEndingPlayerControl] = useState(() => endingState.getIsPlayerControlActive());
+
+  useEffect(() => {
+    return endingState.subscribe(() => {
+      setIsEndingPlayerControl(endingState.getIsPlayerControlActive());
+    });
+  }, []);
+
+  useEffect(() => {
+    if (initialEnding) {
+      sharedPlayerPos.current.set(-2.0, 0.5, -6.0);
+    }
+  }, [initialEnding]);
 
   const isImagesDone = React.useSyncExternalStore(
     (cb) => {
@@ -3170,7 +3553,24 @@ export default function Game() {
     () => isImagesValidated(),
     () => isImagesValidated()
   );
+  const isSection1Done = isImagesDone;
+  const isSection2Done = isSection1Done && Boolean(relayStoreState.diagnosticPassed);
+  const isSection3Unlocked = isSection1Done && isSection2Done;
+  const isSection3Passed = isSection3Unlocked && Boolean(s3State.passed);
+  const isBeaconVerified = isSection3Unlocked && Boolean(s3State.beaconVerified);
+  const isSection3Done = isSection3Passed && isBeaconVerified;
+  const isSection4Unlocked = isSection3Done;
   const diagnosticOpen = relayStoreState.diagnosticConsoleOpen;
+
+  const isAnyModalOpen =
+    terminalOpen ||
+    diagnosticOpen ||
+    section3Open ||
+    transceiverOpen ||
+    section4Open ||
+    endingCutsceneActive ||
+    victoryRecapOpen;
+
   const [skyTarget, setSkyTarget] = useState<CelestialTarget | null>(null);
   const [interactionPrompt, setInteractionPrompt] = useState<string | null>(null);
   const [scanToast, setScanToast] = useState<string | null>(null);
@@ -3179,9 +3579,37 @@ export default function Game() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       (window as any).__telemetryStore = telemetryStore;
-      telemetryStore.formatPendrive(); // Fresh start on every game entry / page refresh
+      // If Section 1 is not validated, ensure downstream sections stay strictly locked & reset
+      if (!isImagesValidated()) {
+        pendriveStore.setSection1Complete(false);
+        relayStore.reset();
+      }
     }
   }, []);
+
+  const benchRecords = useMemo(() => {
+    if (scans.length >= 10) {
+      return recordsFromScans(scans.slice(0, 10));
+    }
+    const fallbackScans: Array<{
+      id: string;
+      category: "black_hole" | "planet" | "stars";
+      targetName: string;
+      imageDataUrl: string;
+    }> = [
+      { id: "bh_1", category: "black_hole", targetName: "Black Hole Singularity", imageDataUrl: generateSampleSnapshot("black_hole", "Black Hole Singularity") },
+      { id: "bh_2", category: "black_hole", targetName: "Black Hole Core", imageDataUrl: generateSampleSnapshot("black_hole", "Black Hole Core") },
+      { id: "pl_1", category: "planet", targetName: "Gas Giant", imageDataUrl: generateSampleSnapshot("planet", "Gas Giant") },
+      { id: "pl_2", category: "planet", targetName: "Gas Giant Rings", imageDataUrl: generateSampleSnapshot("planet", "Gas Giant Rings") },
+      { id: "pl_3", category: "planet", targetName: "Lava Planet", imageDataUrl: generateSampleSnapshot("planet", "Lava Planet") },
+      { id: "st_1", category: "stars", targetName: "Distant Star Cluster Alpha", imageDataUrl: generateSampleSnapshot("stars", "Distant Star Cluster Alpha") },
+      { id: "st_2", category: "stars", targetName: "Distant Star Cluster Beta", imageDataUrl: generateSampleSnapshot("stars", "Distant Star Cluster Beta") },
+      { id: "st_3", category: "stars", targetName: "Deep Space Stars", imageDataUrl: generateSampleSnapshot("stars", "Deep Space Stars") },
+      { id: "st_4", category: "stars", targetName: "Pleiades Node", imageDataUrl: generateSampleSnapshot("stars", "Pleiades Node") },
+      { id: "st_5", category: "stars", targetName: "Centauri Node", imageDataUrl: generateSampleSnapshot("stars", "Centauri Node") },
+    ];
+    return recordsFromScans(fallbackScans);
+  }, [scans]);
 
   const countHole = useMemo(
     () => scans.filter((s) => s.category === "black_hole").length,
@@ -3198,12 +3626,12 @@ export default function Game() {
 
   // Auto unlock cursor when modal opens
   useEffect(() => {
-    if (terminalOpen || diagnosticOpen) {
+    if (isAnyModalOpen) {
       if (typeof document !== "undefined" && document.pointerLockElement) {
         document.exitPointerLock?.();
       }
     }
-  }, [terminalOpen, diagnosticOpen]);
+  }, [isAnyModalOpen]);
 
   // Global suppression of browser pointer lock cooldown / SecurityError rejections
   useEffect(() => {
@@ -3247,14 +3675,56 @@ export default function Game() {
     };
   }, []);
 
-  const [scene1Complete, setScene1Complete] = useState(false);
-  const [scene2Complete, setScene2Complete] = useState(false);
-  const [scene2InputLocked, setScene2InputLocked] = useState(true);
+  const [scene1Complete, setScene1Complete] = useState(() => {
+    if (initialEnding) return true;
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      return (
+        params.get("section") === "2" ||
+        params.get("section") === "3" ||
+        params.get("scene") === "2" ||
+        params.get("scene") === "3"
+      );
+    }
+    return false;
+  });
+  const [scene2Complete, setScene2Complete] = useState(() => {
+    if (initialEnding) return true;
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      return (
+        params.get("section") === "2" ||
+        params.get("section") === "3" ||
+        params.get("scene") === "3"
+      );
+    }
+    return false;
+  });
+  const [scene2InputLocked, setScene2InputLocked] = useState(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      return !(
+        params.get("section") === "2" ||
+        params.get("section") === "3" ||
+        params.get("scene") === "3"
+      );
+    }
+    return true;
+  });
   const [stationInputLocked, setStationInputLocked] = useState(false);
+  const isPauseMenuOpen = scene1Complete && scene2Complete && !isLocked && !isAnyModalOpen;
+
+  useEffect(() => {
+    shipAudio.setPausedDucked(isPauseMenuOpen);
+  }, [isPauseMenuOpen]);
   const [isSection2Testing, setIsSection2Testing] = useState(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      return params.get("section") === "2" || window.location.pathname.includes("/relay");
+      return (
+        params.get("section") === "2" ||
+        params.get("section") === "3" ||
+        window.location.pathname.includes("/relay")
+      );
     }
     return false;
   });
@@ -3266,7 +3736,14 @@ export default function Game() {
       if (params.get("hud") === "0") {
         setIsLocked(true);
       }
-      if (params.get("section") === "2") {
+      if (params.get("section") === "3") {
+        devJumpToSection3();
+        setIsSection2Testing(true);
+        setScene1Complete(true);
+        setScene2Complete(true);
+        setScene2InputLocked(false);
+      } else if (params.get("section") === "2") {
+        devJumpToSection2Transmission();
         setIsSection2Testing(true);
         setScene1Complete(true);
         setScene2Complete(true);
@@ -3298,11 +3775,16 @@ export default function Game() {
     setPingTimestamp(Date.now() / 1000);
   }, []);
 
-  // Global Keydown listener for [E] when interaction prompt is active (e.g. at Data Station / Crew PC)
+  // Global Keydown listener for [E] when interaction prompt is active (e.g. at Data Station / Crew PC / Rescue Two)
   useEffect(() => {
     function handleGlobalKeyDown(e: KeyboardEvent) {
       if (e.code !== "KeyE") return;
-      if (terminalOpen || diagnosticOpen) return;
+      if (terminalOpen || diagnosticOpen || victoryRecapOpen) return;
+      if (interactionPrompt?.includes("BOARD RESCUE TWO")) {
+        setVictoryRecapOpen(true);
+        setIsLocked(false);
+        return;
+      }
       if (
         interactionPrompt?.includes("DATA STATION") ||
         interactionPrompt?.includes("CREW TERMINAL") ||
@@ -3321,17 +3803,32 @@ export default function Game() {
     }
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [interactionPrompt, terminalOpen, diagnosticOpen]);
+  }, [interactionPrompt, terminalOpen, diagnosticOpen, victoryRecapOpen]);
 
+  const lastScanTimeRef = useRef(0);
   const handleCaptureSkyScan = useCallback((target: CelestialTarget | null) => {
     // If Phase 1 images are already validated, or aiming at/scanning a relay node, or in Section 2, suppress sky scan toast & capture completely
-    if (isImagesDone || isImagesValidated() || relayStore.getState().activeTargetNodeId || isSection2Testing || telemetryStore.getState().scans.length >= 10) {
+    if (isImagesDone || isImagesValidated() || relayStore.getState().activeTargetNodeId || isSection2Testing) {
+      return;
+    }
+
+    // Strictly block scanning when inside the ship!
+    if (isPlayerInsideShip(sharedPlayerPos.current.x, sharedPlayerPos.current.z)) {
+      setScanToast("OBSTRUCTED: EXIT THE SHIP ONTO PLANET SURFACE TO SCAN SKY");
+      setTimeout(() => setScanToast(null), 2500);
       return;
     }
 
     if (!target) {
       return;
     }
+
+    // Debounce rapid repeated button presses (400ms cooldown)
+    const now = Date.now();
+    if (now - lastScanTimeRef.current < 400) {
+      return;
+    }
+    lastScanTimeRef.current = now;
 
     const currentScans = telemetryStore.getState().scans;
     if (currentScans.length >= 10) {
@@ -3444,8 +3941,8 @@ export default function Game() {
       <div
         id="three-canvas-container"
         ref={canvasContainerRef}
-        className={`absolute inset-0 z-10 ${terminalOpen ? "pointer-events-none" : "cursor-crosshair pointer-events-auto"}`}
-        onClick={!isLocked && !terminalOpen ? () => requestGameLock(true) : undefined}
+        className={`absolute inset-0 z-10 ${isAnyModalOpen ? "pointer-events-none" : "cursor-crosshair pointer-events-auto"}`}
+        onClick={!isLocked && !isAnyModalOpen ? () => requestGameLock(true) : undefined}
       >
         <Canvas
           dpr={[1, 1.5]}
@@ -3465,13 +3962,41 @@ export default function Game() {
               onOpenCrewTerminal={() => telemetryStore.setTerminalOpen(true)}
               onInteractionPrompt={(p) => setInteractionPrompt(p)}
               onInputLocked={setStationInputLocked}
+              isSection3Unlocked={isSection3Unlocked}
+              isSection3Passed={isSection3Passed}
+              isBeaconVerified={isBeaconVerified}
+              onOpenSection3={() => {
+                if (isSection3Unlocked) {
+                  setSection3Open(true);
+                }
+              }}
+              onOpenTransceiver={() => {
+                if (isSection3Unlocked) {
+                  setTransceiverOpen(true);
+                }
+              }}
+              onOpenAntennaCore={() => {
+                if (isSection4Unlocked) {
+                  setSection4Open(true);
+                }
+              }}
+              isEndingActive={endingCutsceneActive}
+              endingElapsedTime={endingElapsed}
+              reducedMotion={reduceMotion}
+              hasUfoLanded={hasUfoLanded}
+              onTouchdownComplete={() => {
+                setEndingCutsceneActive(false);
+                setHasUfoLanded(true);
+                requestGameLock(true);
+              }}
             />
             {/* ── Section 2: Relay Line & Interactive Scanner System ── */}
             <RelayInteractionManager collidersRef={sharedShipColliders} />
             <GameEngineControls
-              isLocked={isLocked && !terminalOpen && !diagnosticOpen}
-              inputLocked={(scene1Complete && !scene2Complete && scene2InputLocked) || terminalOpen || diagnosticOpen || stationInputLocked}
-              terminalOpen={terminalOpen || diagnosticOpen}
+              isLocked={isLocked && !isAnyModalOpen && (!endingCutsceneActive || isEndingPlayerControl)}
+              mouseSensitivity={mouseSensitivity}
+              inputLocked={(scene1Complete && !scene2Complete && scene2InputLocked) || isAnyModalOpen || stationInputLocked || (endingCutsceneActive && !isEndingPlayerControl)}
+              terminalOpen={isAnyModalOpen || (endingCutsceneActive && !isEndingPlayerControl)}
               hasActivePrompt={Boolean(interactionPrompt)}
               isImagesDone={isImagesDone}
               setIsLocked={setIsLocked}
@@ -3496,82 +4021,20 @@ export default function Game() {
         </Canvas>
       </div>
 
-      {/* ── Section & Storyline Mode Switcher (Directly shifts to Section 2 storyline and reset) ── */}
-      <div className="fixed top-4 left-6 z-[100] flex items-center gap-2 font-mono select-none">
-        {/* Storyline Mode Button */}
-        <button
-          type="button"
-          onClick={() => {
-            setScene1Complete(true);
-            setScene2Complete(true);
-            setScene2InputLocked(false);
-            devResetAllProgressToStoryline();
-            setScanToast("📖 SWAPPED TO STORYLINE: STARTING SECTION 1 (SKY IMAGES)");
-            setTimeout(() => setScanToast(null), 3000);
-          }}
-          className={`px-3 py-1.5 text-xs font-bold tracking-wider uppercase rounded border transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95 ${
-            !isImagesDone
-              ? "bg-[#092b15] border-[#2ee85c] text-[#4bff7b] shadow-[0_0_12px_rgba(46,232,92,0.35)]"
-              : "bg-black/80 hover:bg-neutral-900 border-neutral-700 text-neutral-400 hover:text-white"
-          }`}
-          title="Reset all progress and play normal Storyline from Section 1"
-        >
-          <span>📖 STORYLINE (SEC 1: IMAGES)</span>
-        </button>
-
-        {/* Jump to Section 2 Button */}
-        <button
-          type="button"
-          onClick={() => {
-            setScene1Complete(true);
-            setScene2Complete(true);
-            setScene2InputLocked(false);
-            devJumpToSection2Transmission();
-            setScanToast("⚡ JUMPED TO SECTION 2: TRANSMISSION UNLOCKED (0/6 SCANNED)");
-            setTimeout(() => setScanToast(null), 3000);
-          }}
-          className={`px-3 py-1.5 text-xs font-bold tracking-wider uppercase rounded border transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95 ${
-            isImagesDone
-              ? "bg-[#092b15] border-[#2ee85c] text-[#4bff7b] shadow-[0_0_12px_rgba(46,232,92,0.35)]"
-              : "bg-black/80 hover:bg-neutral-900 border-neutral-700 text-neutral-400 hover:text-white"
-          }`}
-          title="Directly complete Section 1 and unlock Section 2 Transmission fresh"
-        >
-          <span>⚡ JUMP TO SEC 2 (TRANSMISSION)</span>
-        </button>
-
-        {/* Reset Current Section Button */}
-        <button
-          type="button"
-          onClick={() => {
-            setScene1Complete(true);
-            setScene2Complete(true);
-            setScene2InputLocked(false);
-            if (isImagesDone) {
-              devResetSection2Only();
-              setScanToast("↺ SECTION 2 RESET: 0/6 RELAYS SCANNED");
-            } else {
-              devResetAllProgressToStoryline();
-              setScanToast("↺ SECTION 1 RESET: 0/10 SCANS");
-            }
-            setTimeout(() => setScanToast(null), 2500);
-          }}
-          className="px-2.5 py-1.5 text-xs font-bold tracking-wider uppercase rounded border border-neutral-700 hover:border-amber-500 bg-black/80 hover:bg-neutral-900 text-neutral-400 hover:text-amber-400 transition-all cursor-pointer active:scale-95"
-          title="Reset current section back to 0 progress"
-        >
-          <span>↺ RESET</span>
-        </button>
-      </div>
-
       {/* ── Navigation / Return Button ─────────────────────────── */}
-      <div className="fixed top-6 right-6 z-40 flex items-center gap-4">
-        <button
-          onClick={() => router.push("/")}
-          className="px-4 py-2 bg-black/70 hover:bg-black/90 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 font-mono text-xs tracking-widest uppercase rounded transition-all backdrop-blur-md cursor-pointer shadow-[0_0_15px_rgba(0,255,255,0.15)] flex items-center gap-2"
-        >
-          <span>←</span> Base Camp
-        </button>
-      </div>
+      {!endingCutsceneActive && !isPauseMenuOpen && (
+        <div className="fixed top-6 right-6 z-40 flex items-center gap-4">
+          <button
+            onClick={() => {
+              resetAllGameProgress();
+              router.push("/");
+            }}
+            className="px-4 py-2 bg-black/70 hover:bg-black/90 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 font-mono text-xs tracking-widest uppercase rounded transition-all backdrop-blur-md cursor-pointer shadow-[0_0_15px_rgba(0,255,255,0.15)] flex items-center gap-2"
+          >
+            <span>←</span> Base Camp
+          </button>
+        </div>
+      )}
 
       {/* ── SCENE 1: Title, Play, and Boot Sequence ───────────── */}
       {!scene1Complete && (
@@ -3601,32 +4064,24 @@ export default function Game() {
         />
       )}
 
-      {/* ── Start / Click-to-Play Overlay (Only active after Scene 1 & 2 complete and if unlocked) ── */}
-      {scene1Complete && scene2Complete && !isLocked && !terminalOpen && !diagnosticOpen && (
-        <div
-          onClick={() => requestGameLock(true)}
-          className="fixed inset-0 z-30 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[2px] cursor-pointer"
-        >
-          <div className="text-center p-8 border border-cyan-500/40 bg-black/80 rounded-lg shadow-[0_0_40px_rgba(0,255,255,0.25)] max-w-lg mx-4">
-            <h2 className="font-mono text-2xl md:text-3xl font-black text-white tracking-widest mb-2 [text-shadow:0_0_20px_rgba(0,255,255,0.8)]">
-              CLICK TO TAKE CONTROL
-            </h2>
-            <p className="font-sans text-xs md:text-sm text-cyan-200/80 mb-6 tracking-wide">
-              Explore the crashed starship under the general relativity black hole.
-            </p>
-            <div className="grid grid-cols-2 gap-3 text-left font-mono text-xs text-cyan-300/90 border-t border-cyan-500/20 pt-4">
-              <div><span className="text-white font-bold">W A S D</span> — Move</div>
-              <div><span className="text-white font-bold">SHIFT</span> — Sprint</div>
-              <div><span className="text-white font-bold">MOUSE</span> — Look (360°)</div>
-              <div><span className="text-white font-bold">T</span> — Flashlight</div>
-              <div><span className="text-white font-bold">E / F</span> — Sonar Ping / Sky Scan</div>
-              <div><span className="text-white font-bold">ESC</span> — Unlock Cursor</div>
-            </div>
-            <div className="mt-4 text-[11px] text-amber-300/90 font-mono tracking-wider">
-              ✦ Physical Obstacle Collisions Enabled — Boulders & Wreckage cannot be passed through
-            </div>
-          </div>
-        </div>
+      {/* ── Game Pause Menu (Scrap System Core Minimal Kinetic Terminal) ── */}
+      {isPauseMenuOpen && (
+        <ScrapPauseMenu
+          open={true}
+          onResume={() => requestGameLock(true)}
+          mouseSensitivity={mouseSensitivity}
+          onSensitivityChange={handleSensitivityChange}
+          masterVolume={masterVolume}
+          onVolumeChange={handleVolumeChange}
+          isMuted={isMuted}
+          onToggleMute={handleToggleMute}
+          reducedMotion={reduceMotion}
+          onToggleReduceMotion={() => setReduceMotion((prev) => !prev)}
+          onQuitToTitle={() => {
+            resetAllGameProgress();
+            router.push("/");
+          }}
+        />
       )}
 
       {/* ── Visual Camera Shutter Optical Flash ─────────────────────────────────── */}
@@ -3640,7 +4095,7 @@ export default function Game() {
       )}
 
       {/* ── Dynamic Sky Celestial Scanner HUD Reticle ──────────────────────────── */}
-      {scene1Complete && scene2Complete && isLocked && !isImagesDone && !isImagesValidated() && skyTarget && !interactionPrompt && !terminalOpen && !isSection2Testing && scans.length < maxScans && (
+      {scene1Complete && scene2Complete && isLocked && !isImagesDone && !isImagesValidated() && skyTarget && !interactionPrompt && !terminalOpen && !isSection2Testing && scans.length < maxScans && !isPlayerInsideShip(sharedPlayerPos.current.x, sharedPlayerPos.current.z) && (
         <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-[52px] z-30 pointer-events-none flex flex-col items-center font-mono">
           <div className="px-2.5 py-1 bg-black/85 border border-cyan-400/60 rounded text-[10px] text-cyan-300 backdrop-blur-sm whitespace-nowrap shadow-[0_0_15px_rgba(0,255,255,0.3)]">
             <span className="text-amber-400 font-bold">CELESTIAL: </span>
@@ -3692,7 +4147,11 @@ export default function Game() {
           {/* Instruction hint */}
           <div className="text-[10px] text-cyan-200/80 leading-tight">
             {scans.length < maxScans ? (
-              <span>Aim at sky & press <strong className="text-white">[E / F]</strong> to record</span>
+              isPlayerInsideShip(sharedPlayerPos.current.x, sharedPlayerPos.current.z) ? (
+                <span className="text-amber-400 font-bold">⚠ EXIT SHIP ONTO PLANET SURFACE TO SCAN SKY</span>
+              ) : (
+                <span>Aim at sky & press <strong className="text-white">[E / F]</strong> to record</span>
+              )
             ) : (
               <span className="text-emerald-400 font-bold">✔ PENDRIVE READY — INSERT INTO CREW PC</span>
             )}
@@ -3709,22 +4168,42 @@ export default function Game() {
 
 
       {/* ── Active World Object Interaction Prompt (e.g. at Crew Terminal PC) ────── */}
-      {interactionPrompt && !terminalOpen && !diagnosticOpen && (
+      {interactionPrompt && !terminalOpen && !diagnosticOpen && !endingCutsceneActive && !victoryRecapOpen && (
         <button
           onClick={() => {
-            if (
-              interactionPrompt.includes("CREW TERMINAL") ||
-              interactionPrompt.includes("TELEMETRY PENDRIVE") ||
-              interactionPrompt.includes("INSERT PENDRIVE") ||
-              interactionPrompt.includes("DATA STATION") ||
-              interactionPrompt.includes("INSERT TELEMETRY") ||
-              interactionPrompt.includes("DIAGNOSTIC")
-            ) {
-              if (relayStore.getState().consoleUnlocked) {
-                relayStore.setActiveStationTab("diagnostic");
-                relayStore.setDiagnosticConsoleOpen(true);
-              } else {
-                telemetryStore.setTerminalOpen(true);
+            if (interactionPrompt) {
+              if (interactionPrompt.includes("BOARD RESCUE TWO")) {
+                setVictoryRecapOpen(true);
+                setIsLocked(false);
+              } else if (interactionPrompt.includes("ACCESS CORE-B")) {
+                if (isSection3Unlocked) {
+                  setSection3Open(true);
+                }
+              } else if (interactionPrompt.includes("COMMS TRANSCEIVER")) {
+                if (isSection3Unlocked) {
+                  setTransceiverOpen(true);
+                }
+              } else if (
+                interactionPrompt.includes("ACCESS ANTENNA") ||
+                interactionPrompt.includes("ANTENNA TERMINAL")
+              ) {
+                if (isBeaconVerified) {
+                  setSection4Open(true);
+                }
+              } else if (
+                interactionPrompt.includes("CREW TERMINAL") ||
+                interactionPrompt.includes("TELEMETRY PENDRIVE") ||
+                interactionPrompt.includes("INSERT PENDRIVE") ||
+                interactionPrompt.includes("DATA STATION") ||
+                interactionPrompt.includes("INSERT TELEMETRY") ||
+                interactionPrompt.includes("DIAGNOSTIC")
+              ) {
+                if (relayStore.getState().consoleUnlocked) {
+                  relayStore.setActiveStationTab("diagnostic");
+                  relayStore.setDiagnosticConsoleOpen(true);
+                } else {
+                  telemetryStore.setTerminalOpen(true);
+                }
               }
             }
           }}
@@ -3738,37 +4217,15 @@ export default function Game() {
         </button>
       )}
 
-      {/* ── Tactical Suit Equipment HUD (Bottom Bar: Only visible after Scene 1 & 2 complete) ───── */}
-      {scene1Complete && scene2Complete && isLocked && !terminalOpen && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-5 py-2 bg-black/80 border border-cyan-500/30 rounded-full font-mono text-xs backdrop-blur-md pointer-events-none shadow-[0_0_20px_rgba(0,255,255,0.15)]">
-          <span
-            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-              flashlight
-                ? "bg-amber-500/20 text-amber-300 border border-amber-400/40 shadow-[0_0_10px_rgba(245,158,11,0.3)]"
-                : "bg-slate-800 text-slate-400"
-            }`}
-          >
-            [T] LIGHT: {flashlight ? "ON" : "OFF"}
-          </span>
-          <span className="text-cyan-500/40">•</span>
-          <span className="text-cyan-300/80 text-[11px]">
-            [E] INTERACT  •  [F] PING SCANNER
-          </span>
-          <span className="text-cyan-500/40">•</span>
-          <span className="text-cyan-300/80 text-[11px]">
-            [SHIFT] SPRINT
-          </span>
-        </div>
-      )}
 
       {/* ── Telemetry HUD ──────────────────────────────────────── */}
-      <TelemetryHUD />
+      {!endingCutsceneActive && <TelemetryHUD />}
 
       {/* ── Section 2: Relay Line Scanner HUD (Proximity Card, Radial Ring, Dialogue & Chips) ── */}
-      <RelayScannerHUD />
+      {!endingCutsceneActive && isSection1Done && <RelayScannerHUD />}
 
-      {/* ── Oracle Sampling Bias Comms Dialogue (When Dataset Is Rejected & Purged) ──── */}
-      <OracleBiasHUD />
+      {/* ── Oracle Bias Comms Dialogue ──── */}
+      {!endingCutsceneActive && <OracleBiasHUD />}
 
       {/* ── Retro CRT Green Phosphor Terminal UI (Data Intake + Transmission Diagnostic) ──── */}
       {(terminalOpen || diagnosticOpen) && (
@@ -3788,6 +4245,158 @@ export default function Game() {
           }}
           reducedMotion={reduceMotion}
         />
+      )}
+
+      {/* ── Section 3: Deep-Space Comms Dialogue (Section 2 -> 3 Transition) ──── */}
+      <Section3CommsHUD isUnlocked={isSection3Unlocked && !isAnyModalOpen} />
+
+      {/* ── Section 3: CORE-B Signal Analysis Bench Terminal UI ──── */}
+      {section3Open && isSection3Unlocked && (
+        <BenchTerminal
+          open={section3Open}
+          onClose={() => {
+            setSection3Open(false);
+            requestGameLock(true);
+          }}
+          records={benchRecords}
+          reducedMotion={reduceMotion}
+        />
+      )}
+
+      {/* ── Section 3: CORE-C Comms Transceiver (Beacon Handshake Verification) ──── */}
+      {transceiverOpen && (
+        <CommsTransceiverModal
+          open={transceiverOpen}
+          onClose={() => {
+            setTransceiverOpen(false);
+            requestGameLock(true);
+          }}
+          onProceedToAntennaCore={() => {
+            setTransceiverOpen(false);
+            requestGameLock(true);
+          }}
+          reducedMotion={reduceMotion}
+        />
+      )}
+
+      {/* ── Section 4: Deep-Space Comms Dialogue (Section 3 -> 4 Transition) ──── */}
+      <Section4CommsHUD isUnlocked={isBeaconVerified && !isAnyModalOpen} />
+
+      {/* ── Section 4: Antenna Core // Neural Training Lab Terminal UI ──── */}
+      {section4Open && (
+        <NeuralTerminal
+          open={section4Open}
+          onClose={() => {
+            setSection4Open(false);
+            requestGameLock(true);
+          }}
+          onStartEndingCutscene={() => {
+            setSection4Open(false);
+            setEndingElapsed(0);
+            setEndingCutsceneActive(true);
+          }}
+          reducedMotion={reduceMotion}
+        />
+      )}
+
+      {/* ── Ending Cinematic Cutscene: Real Scene Antenna Beam, Saucer Landing, Scrap Escape ──── */}
+      {endingCutsceneActive && (
+        <EscapeCutscene
+          reducedMotion={reduceMotion}
+          onLandingComplete={() => {
+            setEndingCutsceneActive(false);
+            setHasUfoLanded(true);
+            requestGameLock(true);
+          }}
+          onExplorePlayground={() => {
+            setEndingCutsceneActive(false);
+            setEndingElapsed(0);
+            setSection4Open(true);
+          }}
+          onComplete={() => {
+            setEndingCutsceneActive(false);
+            setEndingElapsed(0);
+            resetAllGameProgress();
+            setScanToast("↺ MISSION RESET: STORYLINE RESTARTED FROM SECTION 1");
+            setTimeout(() => setScanToast(null), 3000);
+          }}
+        />
+      )}
+
+      {/* ── Epilogue / Mission Complete Summary Card (When player boards Rescue Two) ── */}
+      {victoryRecapOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-6 pointer-events-auto font-mono">
+          <div className="max-w-xl w-full bg-slate-950 border border-emerald-500/50 rounded-xl p-6 md:p-8 shadow-[0_0_50px_rgba(16,185,129,0.2)] text-slate-200 space-y-6">
+            <div className="border-b border-emerald-900/60 pb-4 text-center space-y-1">
+              <div className="text-xs uppercase tracking-widest text-emerald-400 font-bold">
+                MISSION ACCOMPLISHED // EXTRACTION CONFIRMED
+              </div>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-wide">
+                PLANETARY ESCAPE COMPLETE
+              </h1>
+            </div>
+
+            <div className="space-y-3 bg-slate-900/60 border border-slate-800 p-4 rounded-lg text-xs md:text-sm">
+              <div className="flex items-center justify-between text-emerald-400 font-bold">
+                <span>✓ SECTION 1: DATA TELEMETRY</span>
+                <span className="text-slate-400 font-normal">CLEANSED & VALIDATED</span>
+              </div>
+              <div className="flex items-center justify-between text-emerald-400 font-bold">
+                <span>✓ SECTION 2: TRANSMISSION RELAY</span>
+                <span className="text-slate-400 font-normal">VOLTAGE HARMONIZED (120V)</span>
+              </div>
+              <div className="flex items-center justify-between text-emerald-400 font-bold">
+                <span>✓ SECTION 3: CORE-C BEACON</span>
+                <span className="text-slate-400 font-normal">STEADY BEAT ISOLATED (0.8 Hz)</span>
+              </div>
+              <div className="flex items-center justify-between text-emerald-400 font-bold">
+                <span>✓ SECTION 4: ANTENNA NEURAL LAB</span>
+                <span className="text-slate-400 font-normal">SYNAPSES TRAINED (&gt; 95% ACCURACY)</span>
+              </div>
+              <div className="flex items-center justify-between text-emerald-400 font-bold">
+                <span>✓ RESCUE TWO EXTRACTION</span>
+                <span className="text-slate-400 font-normal">TOUCHDOWN ON PLANET SURFACE</span>
+              </div>
+            </div>
+
+            <div className="bg-cyan-950/20 border-l-2 border-cyan-400 p-3 rounded text-xs text-cyan-200/90 italic">
+              &quot;Your measurements found them, SCRAP. You saved us.&quot; — ORACLE
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setVictoryRecapOpen(false);
+                  setEndingCutsceneActive(true);
+                  setEndingElapsed(0);
+                }}
+                className="flex-1 py-3 px-4 rounded bg-slate-900 border border-slate-700 text-slate-200 hover:text-white hover:border-cyan-400 transition-colors font-bold text-xs uppercase tracking-wider text-center cursor-pointer"
+              >
+                ↺ REPLAY CINEMATIC
+              </button>
+
+              <button
+                onClick={() => {
+                  setVictoryRecapOpen(false);
+                  setSection4Open(true);
+                }}
+                className="flex-1 py-3 px-4 rounded bg-cyan-950/80 border border-cyan-500/80 text-cyan-300 hover:bg-cyan-900 hover:text-white transition-colors font-bold text-xs uppercase tracking-wider text-center shadow-lg cursor-pointer"
+              >
+                🧠 EXPLORE NEURAL LAB
+              </button>
+
+              <button
+                onClick={() => {
+                  setVictoryRecapOpen(false);
+                  requestGameLock(true);
+                }}
+                className="flex-1 py-3 px-4 rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-colors font-bold text-xs uppercase tracking-wider text-center shadow-lg shadow-emerald-900/40 cursor-pointer"
+              >
+                ✕ CONTINUE PLAYING
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

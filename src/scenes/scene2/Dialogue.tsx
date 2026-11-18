@@ -98,12 +98,12 @@ export default function DialogueBox({
     };
   }, [currentLine?.id]);
 
-  // Space / Enter keyboard advance
+  // Space / Enter / KeyE keyboard advance
   useEffect(() => {
     if (!isInteractive || !onAdvance) return;
 
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.code === "Space" || e.code === "Enter") {
+      if (e.code === "Space" || e.code === "Enter" || e.code === "KeyE") {
         e.preventDefault();
         if (isTyping && currentLine) {
           // Instant finish line if pressed during typing
@@ -120,13 +120,13 @@ export default function DialogueBox({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isInteractive, isTyping, currentLine, onAdvance]);
 
-  // Auto-advance after 6s of complete text if user doesn't interact
+  // Auto-advance after 14s of complete text if user doesn't interact (generous reading window)
   useEffect(() => {
     if (!isInteractive || !onAdvance || isTyping || !currentLine) return;
 
     const timer = window.setTimeout(() => {
       onAdvance?.();
-    }, 6000);
+    }, 14000);
 
     return () => clearTimeout(timer);
   }, [isInteractive, isTyping, currentLine?.id, onAdvance]);
@@ -206,7 +206,7 @@ export default function DialogueBox({
       {isInteractive && showAdvancePrompt && !isTyping && onAdvance && (
         <div className="mt-2 text-right">
           <span className="font-mono text-[11px] text-cyan-400/80 hover:text-cyan-200 tracking-widest uppercase transition-colors">
-            Click or Press Space / Enter to continue ▾
+            Click or Press [E] / Space / Enter to continue ▾
           </span>
         </div>
       )}

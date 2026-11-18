@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Share_Tech_Mono, Rajdhani, Chakra_Petch } from "next/font/google";
 import "./globals.css";
+import "katex/dist/katex.min.css";
 import "@/styles/neonNoir.css";
 
 const mono = Share_Tech_Mono({

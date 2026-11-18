@@ -61,39 +61,31 @@ export function createDefaultDiagnosticConfig(): RelayConfig {
   };
 }
 
+const DORMANT_RELAY_STATE: RelayStoreState = {
+  scannedNodeIds: [],
+  readings: {},
+  activeTargetNodeId: null,
+  scanningNodeId: null,
+  scanProgress: 0,
+  floatingTags: {},
+  dialogueTriggered: {
+    oracleIntro: false,
+    r3Scanned: false,
+    r4Scanned: false,
+    allComplete: false,
+  },
+  consoleUnlocked: false,
+  diagnosticConfig: createDefaultDiagnosticConfig(),
+  attempts: [],
+  lastResult: null,
+  diagnosticPassed: false,
+  activeStationTab: "intake",
+  diagnosticConsoleOpen: false,
+};
+
 function loadInitialState(): RelayStoreState {
   const defaultCfg = createDefaultDiagnosticConfig();
-
-  if (typeof window !== "undefined") {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return {
-          scannedNodeIds: parsed.scannedNodeIds || [],
-          readings: parsed.readings || {},
-          activeTargetNodeId: null,
-          scanningNodeId: null,
-          scanProgress: 0,
-          floatingTags: {},
-          dialogueTriggered: parsed.dialogueTriggered || {
-            oracleIntro: false,
-            r3Scanned: false,
-            r4Scanned: false,
-            allComplete: false,
-          },
-          consoleUnlocked: parsed.consoleUnlocked || false,
-          diagnosticConfig: parsed.diagnosticConfig || defaultCfg,
-          attempts: parsed.attempts || [],
-          lastResult: parsed.lastResult || null,
-          diagnosticPassed: parsed.diagnosticPassed || false,
-          activeStationTab: parsed.activeStationTab || "intake",
-          diagnosticConsoleOpen: false,
-        };
-      }
-    } catch {}
-  }
-  return {
+  const freshDefault: RelayStoreState = {
     scannedNodeIds: [],
     readings: {},
     activeTargetNodeId: null,
@@ -114,6 +106,45 @@ function loadInitialState(): RelayStoreState {
     activeStationTab: "intake",
     diagnosticConsoleOpen: false,
   };
+
+  if (typeof window !== "undefined") {
+    try {
+      // Validate that Section 1 was genuinely completed before restoring Section 2 relay progress
+      const pRaw = localStorage.getItem("neuroscrap_pendrive_store_v1");
+      const tRaw = localStorage.getItem("neuroscrap_telemetry_pendrive_v1");
+      const parsedP = pRaw ? JSON.parse(pRaw) : null;
+      const parsedT = tRaw ? JSON.parse(tRaw) : null;
+
+      const isSec1Done = Boolean(
+        parsedP?.section1Complete &&
+        Array.isArray(parsedP?.uploadedBatches) &&
+        parsedP.uploadedBatches.length > 0 &&
+        Array.isArray(parsedT?.scans) &&
+        parsedT.scans.length >= 10
+      );
+
+      if (!isSec1Done) {
+        // Section 1 is not done — relays MUST stay fresh/unscanned
+        localStorage.removeItem(STORAGE_KEY);
+        return freshDefault;
+      }
+
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...freshDefault,
+          ...parsed,
+          activeTargetNodeId: null,
+          scanningNodeId: null,
+          scanProgress: 0,
+          floatingTags: {},
+          diagnosticConsoleOpen: false,
+        };
+      }
+    } catch {}
+  }
+  return freshDefault;
 }
 
 class RelayStore {
@@ -121,6 +152,27 @@ class RelayStore {
   private listeners = new Set<Listener>();
 
   public getState(): RelayStoreState {
+    if (typeof window !== "undefined") {
+      try {
+        const pRaw = localStorage.getItem("neuroscrap_pendrive_store_v1");
+        const tRaw = localStorage.getItem("neuroscrap_telemetry_pendrive_v1");
+        const parsedP = pRaw ? JSON.parse(pRaw) : null;
+        const parsedT = tRaw ? JSON.parse(tRaw) : null;
+        const isSec1Done = Boolean(
+          parsedP?.section1Complete &&
+          Array.isArray(parsedP?.uploadedBatches) &&
+          parsedP.uploadedBatches.length > 0 &&
+          parsedP.uploadedBatches.some((b: string) => b && b !== "BATCH_DEV_AUTO") &&
+          Array.isArray(parsedT?.scans) &&
+          parsedT.scans.length >= 10 &&
+          parsedT.analysisOutcome !== "sampling_bias"
+        );
+
+        if (!isSec1Done) {
+          return DORMANT_RELAY_STATE;
+        }
+      } catch {}
+    }
     return this.state;
   }
 

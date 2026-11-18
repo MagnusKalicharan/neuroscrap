@@ -58,21 +58,33 @@ function notify() {
 }
 
 function loadState(): TelemetryState {
-  // Always begin each fresh game session/page refresh with an empty pendrive
-  // so the player can physically walk around and capture new celestial scans
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Ignore
-    }
+  if (typeof window === "undefined") return { ...DEFAULT_STATE };
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_STATE };
+    const parsed = JSON.parse(raw);
+    return {
+      scans: Array.isArray(parsed.scans) ? parsed.scans : [],
+      maxScans: 10,
+      terminalOpen: false,
+      pendriveMounted: Boolean(parsed.pendriveMounted ?? false),
+      analysisOutcome: parsed.analysisOutcome || null,
+      biasMessage: parsed.biasMessage || null,
+      activeDialogueKey: parsed.activeDialogueKey || null,
+      dialogueIndex: typeof parsed.dialogueIndex === "number" ? parsed.dialogueIndex : 0,
+    };
+  } catch {
+    return { ...DEFAULT_STATE };
   }
-  return { ...DEFAULT_STATE };
 }
 
 function saveState() {
-  // In-session state is kept reactive in memory via useSyncExternalStore.
-  // We do NOT persist old scans across page reloads so refreshing always allows capturing new scans.
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
+  } catch {
+    // Ignore quota or private mode errors
+  }
 }
 
 export const telemetryStore = {
@@ -207,41 +219,34 @@ export const telemetryStore = {
     const planets = scans.filter((s) => s.category === "planet").length;
     const stars = scans.filter((s) => s.category === "stars").length;
 
-    // Must have good coverage across high, medium, and near-zero gravity
-    const isRepresentative =
-      holes >= 2 &&
-      holes <= 4 &&
-      planets >= 2 &&
-      planets <= 5 &&
-      stars >= 2 &&
-      stars <= 5;
+    // A sample is biased if:
+    // 1. Any single category has 5 or more scans (majority >= 5)
+    // 2. Or total scans < 10
+    // 3. Or all 10 are the same kind
+    const isBiased = scans.length < 10 || holes >= 5 || planets >= 5 || stars >= 5;
 
-    const outcome: AnalysisOutcome = isRepresentative
-      ? "representative_sample"
-      : "sampling_bias";
+    const outcome: AnalysisOutcome = isBiased
+      ? "sampling_bias"
+      : "representative_sample";
 
     let biasMessage: string | null = null;
     if (outcome === "sampling_bias") {
-      if (planets > 0 && holes === 0 && stars === 0) {
-        biasMessage = "You have only taken Planet images. The sample is biased.";
-      } else if (stars > 0 && holes === 0 && planets === 0) {
-        biasMessage = "You have only taken Star images. The sample is biased.";
-      } else if (holes > 0 && planets === 0 && stars === 0) {
+      if (scans.length < 10) {
+        biasMessage = `Pendrive buffer incomplete (${scans.length}/10). Collect 10 scans total.`;
+      } else if (holes === 10) {
         biasMessage = "You have only taken Black Hole images. The sample is biased.";
-      } else if (planets > holes && planets > stars) {
-        biasMessage = "You have taken Planet images more. The sample is biased.";
-      } else if (stars > holes && stars > planets) {
-        biasMessage = "You have taken Star images more. The sample is biased.";
-      } else if (holes > planets && holes > stars) {
-        biasMessage = "You have taken Black Hole images more. The sample is biased.";
-      } else if (holes === 0) {
-        biasMessage = "You have not taken Black Hole images. The sample is biased.";
-      } else if (planets === 0) {
-        biasMessage = "You have not taken Planet images. The sample is biased.";
-      } else if (stars === 0) {
-        biasMessage = "You have not taken Star images. The sample is biased.";
+      } else if (planets === 10) {
+        biasMessage = "You have only taken Planet images. The sample is biased.";
+      } else if (stars === 10) {
+        biasMessage = "You have only taken Star images. The sample is biased.";
+      } else if (holes >= 5) {
+        biasMessage = `You have taken Black Hole images more (${holes}/10). The sample is biased.`;
+      } else if (planets >= 5) {
+        biasMessage = `You have taken Planet images more (${planets}/10). The sample is biased.`;
+      } else if (stars >= 5) {
+        biasMessage = `You have taken Star images more (${stars}/10). The sample is biased.`;
       } else {
-        biasMessage = "You have taken some types of images more. The sample is biased.";
+        biasMessage = "You have taken one type of image more. The sample is biased.";
       }
     } else {
       biasMessage = "Sample verified! You have a balanced mix of Black Hole, Planet, and Star images.";

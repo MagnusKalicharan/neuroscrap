@@ -20,10 +20,14 @@ export interface BorderBeamCornerCutCardProps
   description?: string;
   icon?: React.ReactNode;
   children?: React.ReactNode;
+  contentClassName?: string;
   className?: string;
   as?: "div" | "button" | "a";
   disabled?: boolean;
   onClick?: React.MouseEventHandler<HTMLElement>;
+  href?: string;
+  target?: string;
+  rel?: string;
 }
 
 const COLOR_MAP: Record<string, string> = {
@@ -55,6 +59,7 @@ export default function BorderBeamCornerCutCard({
   description,
   icon,
   children,
+  contentClassName,
   className = "",
   as = "div",
   onClick,
@@ -141,7 +146,7 @@ export default function BorderBeamCornerCutCard({
     },
   };
 
-  const isInteractive = Boolean(onClick) || as === "button";
+  const isInteractive = Boolean(onClick) || as === "button" || as === "a";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Comp: any = as;
 
@@ -312,7 +317,7 @@ export default function BorderBeamCornerCutCard({
       )}
 
       {/* ── Content Container ── */}
-      <div className="relative z-20 w-full h-full p-4 flex flex-col justify-center">
+      <div className={`relative z-20 w-full h-full flex flex-col justify-center ${contentClassName ?? "p-4"}`}>
         {/* If standard card content props provided: */}
         {(icon || title || description) && (
           <div className="flex items-start gap-4">

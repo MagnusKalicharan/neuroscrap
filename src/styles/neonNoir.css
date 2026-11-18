@@ -142,3 +142,79 @@
   animation: none !important;
   transition: none !important;
 }
+
+/* ── Landing Page Redesign Motion & Sweep ──────────────────────────────── */
+@keyframes landing-sweep {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+
+.landing-sweep-beam {
+  animation: landing-sweep 2s linear infinite;
+}
+
+@keyframes landing-btn-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.landing-btn-enter {
+  opacity: 0;
+  animation: landing-btn-fade-in 240ms ease-out forwards;
+}
+
+@keyframes landing-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.landing-modal-panel {
+  animation: landing-modal-in 180ms ease-out forwards;
+}
+
+@keyframes landing-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.landing-backdrop-enter {
+  animation: landing-backdrop-in 180ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-sweep-beam {
+    animation: none !important;
+  }
+  .landing-modal-panel {
+    animation: landing-backdrop-in 100ms ease-out forwards !important;
+    transform: none !important;
+  }
+  .landing-backdrop-enter {
+    animation: landing-backdrop-in 100ms ease-out forwards !important;
+  }
+  .landing-btn-enter {
+    animation: landing-backdrop-in 100ms ease-out forwards !important;
+    transform: none !important;
+  }
+}
+

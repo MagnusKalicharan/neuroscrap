@@ -1,0 +1,143 @@
+/* ==========================================================================
+   SCRAP // SYSTEM CORE DESIGN TOKENS (systemCoreTokens.css)
+   Strictly adheres to Section 1 palette & typography rules:
+   - void: #04060B
+   - haze: #0B1F2A
+   - line: #2A3B4A
+   - text: #C9D6E2
+   - dim: #6F8394
+   - accent cyan: #19F0FF
+   - warm: #FF9A1F (current item and warnings only)
+   - core-white: #FFF4E0
+   ========================================================================== */
+
+:root {
+  --sc-void: #04060B;
+  --sc-haze: #0B1F2A;
+  --sc-line: #2A3B4A;
+  --sc-text: #C9D6E2;
+  --sc-dim: #6F8394;
+  --sc-accent-cyan: #19F0FF;
+  --sc-warm: #FF9A1F;
+  --sc-core-white: #FFF4E0;
+}
+
+/* ── Chamfered Clip Paths (8-12px) ──────────────────────────────────────── */
+.sc-chamfer-8 {
+  clip-path: polygon(
+    8px 0%,
+    100% 0%,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0% 100%,
+    0% 8px
+  );
+}
+
+.sc-chamfer-12 {
+  clip-path: polygon(
+    12px 0%,
+    100% 0%,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0% 100%,
+    0% 12px
+  );
+}
+
+.sc-chamfer-br {
+  clip-path: polygon(
+    0% 0%,
+    100% 0%,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0% 100%
+  );
+}
+
+/* ── Typography & Glow Effects ──────────────────────────────────────────── */
+.sc-glow-cyan {
+  text-shadow: 0 0 6px rgba(25, 240, 255, 0.4);
+}
+
+.sc-glow-warm {
+  text-shadow: 0 0 6px rgba(255, 154, 31, 0.45);
+}
+
+.sc-glow-white {
+  text-shadow: 0 0 8px rgba(255, 244, 224, 0.5);
+}
+
+/* ── Scanlines over Text Areas Only (8% opacity, never over drawings) ───── */
+.sc-scanlines {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(4, 6, 11, 0.08) 0px,
+    rgba(4, 6, 11, 0.08) 1.5px,
+    transparent 1.5px,
+    transparent 3px
+  );
+}
+
+/* ── Background Dimming Gradient (88% void left to 35% void right) ──────── */
+.sc-backdrop-gradient {
+  background: linear-gradient(
+    90deg,
+    rgba(4, 6, 11, 0.88) 0%,
+    rgba(4, 6, 11, 0.65) 55%,
+    rgba(4, 6, 11, 0.35) 100%
+  );
+}
+
+/* ── Text Motion & Kinetic Hover Animations ───────────────────────────── */
+.sc-menu-text {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              letter-spacing 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.2s ease,
+              text-shadow 0.2s ease;
+  will-change: transform, letter-spacing;
+}
+
+.sc-menu-text:hover {
+  transform: translateX(14px);
+  letter-spacing: 0.16em;
+  color: var(--sc-core-white);
+  text-shadow: 0 0 12px rgba(25, 240, 255, 0.55);
+}
+
+.sc-menu-text-active {
+  transform: translateX(22px);
+  letter-spacing: 0.22em;
+  color: var(--sc-core-white);
+  text-shadow: 0 0 18px rgba(25, 240, 255, 0.8), 0 0 30px rgba(25, 240, 255, 0.3);
+  animation: sc-selected-glow 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes sc-selected-glow {
+  0% {
+    text-shadow: 0 0 14px rgba(25, 240, 255, 0.7);
+  }
+  100% {
+    text-shadow: 0 0 24px rgba(25, 240, 255, 0.95), 0 0 35px rgba(25, 240, 255, 0.4);
+  }
+}
+
+.sc-indicator-bar {
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: center left;
+}
+
+.sc-content-fade {
+  animation: sc-panel-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes sc-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

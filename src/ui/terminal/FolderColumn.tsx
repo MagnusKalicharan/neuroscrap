@@ -24,6 +24,7 @@ export function FolderColumn({
   onReportAnchor,
 }: FolderColumnProps) {
   const activeRef = useRef<HTMLDivElement>(null);
+  const isCompact = slots.length > 4;
 
   // Measure and report the right-center anchor of the active folder slot for the connector line
   useEffect(() => {
@@ -52,13 +53,13 @@ export function FolderColumn({
         FOLDERS
       </div>
 
-      {/* ── 4 Stacked Slots ────────────────────────────────────────── */}
+      {/* ── Stacked Slots ────────────────────────────────────────── */}
       <div
-        className="flex flex-col gap-[var(--term-folder-slot-gap)]"
+        className={`flex flex-col ${isCompact ? "gap-2" : "gap-[var(--term-folder-slot-gap)]"}`}
         role="listbox"
         aria-labelledby="term-folders-heading"
       >
-        {slots.slice(0, 4).map((slot, idx) => {
+        {slots.map((slot, idx) => {
           const isEmpty = slot.label === null;
           const isActive = !isEmpty && slot.id === activeId;
 
@@ -66,7 +67,7 @@ export function FolderColumn({
             return (
               <div
                 key={`empty-folder-${idx}`}
-                className="w-full h-[var(--term-folder-slot-height)] border border-[var(--term-outline-green)] term-slot-empty opacity-90 cursor-not-allowed"
+                className={`w-full ${isCompact ? "h-[68px]" : "h-[var(--term-folder-slot-height)]"} border border-[var(--term-outline-green)] term-slot-empty opacity-90 cursor-not-allowed`}
                 onClick={() => {
                   terminalSound.playErrorBuzz();
                 }}
@@ -80,6 +81,7 @@ export function FolderColumn({
           return (
             <div
               key={slot.id}
+              data-folder={slot.id}
               ref={isActive ? activeRef : null}
               tabIndex={0}
               role="option"
@@ -95,7 +97,7 @@ export function FolderColumn({
                   onSelectFolder(slot.id);
                 }
               }}
-              className={`relative w-full h-[var(--term-folder-slot-height)] px-5 flex items-center justify-start text-[18px] font-bold tracking-[0.16em] uppercase cursor-pointer transition-all duration-100 ${
+              className={`relative w-full ${isCompact ? "h-[68px] text-[16px]" : "h-[var(--term-folder-slot-height)] text-[18px]"} px-5 flex items-center justify-start font-bold tracking-[0.16em] uppercase cursor-pointer transition-all duration-100 ${
                 isActive
                   ? "bg-[var(--term-dark-bg)] text-[var(--term-green-text-bright)] border-t border-b border-[var(--term-outline-green)] shadow-[0_0_15px_rgba(38,214,73,0.25)] font-black term-glow"
                   : "bg-transparent text-[var(--term-green-text)] border border-[var(--term-outline-green)] hover:border-[var(--term-green-text-bright)] hover:text-[var(--term-green-text-bright)] hover:bg-[rgba(28,168,72,0.06)]"

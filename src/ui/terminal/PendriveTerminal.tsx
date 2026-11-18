@@ -21,7 +21,6 @@ import {
 } from "../../components/telemetry/telemetryStore";
 import { TransmissionTerminalSection } from "../../section2/diagnostic/TransmissionTerminalSection";
 import { relayStore } from "../../section2/relayStore";
-import { devSkipImagesAndUnlockSection2 } from "../../section2/section2Dev";
 
 export interface PendriveTerminalProps {
   open: boolean;
@@ -84,10 +83,7 @@ export function PendriveTerminal({
   // Screen reader announcement
   const [announcement, setAnnouncement] = useState("");
 
-  const imagesDone =
-    (telemetry.analysisOutcome === "representative_sample" ||
-      store.uploadedBatches.includes("BATCH_DEV_AUTO")) &&
-    telemetry.analysisOutcome !== "sampling_bias";
+  const imagesDone = Boolean(telemetry.scans.length >= 10 && store.section1Complete && store.uploadedBatches.length > 0);
 
   // Build Folder list: 4 slots total (Slot 1: "IMAGES", Slot 2: "TRANSMISSION", Slot 3: "AUDIO", Slot 4: null)
   const folderSlots = useMemo<FolderSlotDef[]>(() => {
@@ -360,17 +356,15 @@ export function PendriveTerminal({
     if (outcome === "sampling_bias") {
       terminalSound.playErrorBuzz();
       setUploading(false);
-      const biasMsg = telemetryStore.getState().biasMessage;
-      // Per instructions: "if the sample is biased then the transmission should not unlock
-      // and the texts said by oracle shpuld not be said instead he should delete all scans and again take screenshots"
-      telemetryStore.purgeScansDueToBias(biasMsg || "Sampling bias detected.");
-      pendriveStore.reset();
-      onClose("bias_rejected");
+      pendriveStore.setSection1Complete(false);
+      relayStore.reset();
+      // Keep terminal open so the player sees the red mark with the bias message and can click "DELETE ALL SCANS & TRY AGAIN"
       return;
     }
 
     const batchId = `BATCH_${Date.now()}`;
     pendriveStore.recordBatchUpload(batchId);
+    pendriveStore.setSection1Complete(true);
     onUpload?.(batchId);
     setUploading(false);
     onClose("uploaded");
@@ -439,36 +433,8 @@ export function PendriveTerminal({
               SALVAGE TERMINAL
             </span>
 
-            {/* Right End: Exit / Eject Button & Small Solid Square */}
-            <div className="flex items-center gap-3">
-              {!imagesDone && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    terminalSound.playSelectBlip();
-                    devSkipImagesAndUnlockSection2();
-                    setActiveFolderId("transmission");
-                  }}
-                  className="text-[10px] font-black text-black bg-amber-400 hover:bg-amber-300 px-2.5 py-1 border border-black rounded uppercase font-mono cursor-pointer active:scale-95 shadow-sm transition-all"
-                  title="Dev Skip: Complete Images and jump to Section 2"
-                >
-                  ⚡ [DEV] SKIP TO SEC 2
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  terminalSound.playEjectClick();
-                  onClose("eject");
-                }}
-                className="text-[11px] font-black text-[var(--term-dark-text)] hover:bg-[var(--term-dark-text)] hover:text-[var(--term-header-green)] px-2.5 py-1 border-2 border-[var(--term-dark-text)] transition-all cursor-pointer font-mono uppercase flex items-center gap-1.5 active:scale-95 shadow-sm"
-                title="Eject Pendrive and Exit (Press Q or Esc)"
-              >
-                <span>✕</span>
-                <span>EXIT / EJECT [Q]</span>
-              </button>
+            {/* Right End: Small Solid Square Exit Dot */}
+            <div className="flex items-center">
               {/* The Small Solid Square at the far right edge from reference */}
               <div
                 className="w-4 h-4 bg-[var(--term-dark-text)] cursor-pointer hover:opacity-75 active:scale-90 transition-all"
@@ -539,18 +505,6 @@ export function PendriveTerminal({
                       <span className="text-xs text-[var(--term-green-text)] opacity-70">
                         PRESS [Q] OR ESC TO EXIT TERMINAL
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          terminalSound.playSelectBlip();
-                          devSkipImagesAndUnlockSection2();
-                          setActiveFolderId("transmission");
-                        }}
-                        className="px-3.5 py-2 text-xs font-black uppercase tracking-wider bg-[#143d20] hover:bg-[#1e582e] text-[#5dfa87] border-2 border-[#22d952] rounded shadow-[0_0_15px_rgba(34,217,82,0.4)] transition-all cursor-pointer active:scale-95"
-                        title="Dev test shortcut: skip images part and unlock transmission"
-                      >
-                        ⚡ [DEV] SKIP IMAGES & UNLOCK SECTION 2
-                      </button>
                     </div>
                   </div>
                 ) : (
@@ -590,8 +544,12 @@ export function PendriveTerminal({
                     analysisOutcome={telemetry.analysisOutcome}
                     biasMessage={telemetry.biasMessage}
                     onFormatPendrive={() => {
-                      telemetryStore.formatPendrive();
+                      const biasMsg = telemetry.biasMessage || "Sampling bias detected.";
+                      telemetryStore.purgeScansDueToBias(biasMsg);
+                      pendriveStore.reset();
+                      relayStore.reset();
                       terminalSound.playSelectBlip();
+                      onClose("bias_rejected");
                     }}
                     totalScans={telemetry.scans.length}
                     maxScans={telemetry.maxScans}

@@ -32,48 +32,31 @@ const overflowOk = telemetryStore.addScan({
 assert.strictEqual(overflowOk, false, "11th scan must be rejected when buffer is full");
 console.log("✔ Test 2: Max 10 scans buffer capacity enforced.");
 
-// Test 3: Evaluate 10 Black Hole scans -> MUST BE SAMPLING BIAS
-const outcomeBias = telemetryStore.evaluatePendriveData();
-assert.strictEqual(outcomeBias, "sampling_bias", "10 Black Hole scans must trigger sampling_bias");
+// Test 3: Evaluate 10 Black Hole scans -> MUST BE SAMPLING BIAS (all 10 or >= 5)
+const outcome = telemetryStore.evaluatePendriveData();
+assert.strictEqual(outcome, "sampling_bias", "10 Black Hole scans must trigger sampling_bias");
 assert.strictEqual(telemetryStore.getState().analysisOutcome, "sampling_bias");
 assert.strictEqual(telemetryStore.getState().biasMessage, "You have only taken Black Hole images. The sample is biased.");
 assert.strictEqual(telemetryStore.getState().activeDialogueKey, "bias_failure");
-console.log("✔ Test 3: Overwhelming Black Hole scans triggers SAMPLING BIAS failure with accurate message.");
+console.log("✔ Test 3: Overwhelming Black Hole scans correctly triggers SAMPLING BIAS.");
 
-// Test 3b: Test 10 Planet scans -> MUST BE SAMPLING BIAS with Planet message
+// Test 3b: Majority >= 5 scans (5 planets, 3 BH, 2 stars) -> MUST BE SAMPLING BIAS
 telemetryStore.formatPendrive();
-for (let i = 0; i < 10; i++) {
-  telemetryStore.addScan({
-    targetName: "Gas Giant",
-    category: "planet",
-    gravity: 0.48,
-    elevationDeg: 30,
-    azimuthDeg: 90,
-  });
+for (let i = 0; i < 5; i++) {
+  telemetryStore.addScan({ targetName: "Planet", category: "planet", gravity: 0.44, elevationDeg: 30, azimuthDeg: 90 });
 }
-const outcomePlanetBias = telemetryStore.evaluatePendriveData();
-assert.strictEqual(outcomePlanetBias, "sampling_bias");
-assert.strictEqual(telemetryStore.getState().biasMessage, "You have only taken Planet images. The sample is biased.");
-console.log("✔ Test 3b: 10 Planet scans triggers 'You have only taken Planet images. The sample is biased.'");
-
-// Test 3c: Test 10 Star scans -> MUST BE SAMPLING BIAS with Star message
-telemetryStore.formatPendrive();
-for (let i = 0; i < 10; i++) {
-  telemetryStore.addScan({
-    targetName: "Distant Stars",
-    category: "stars",
-    gravity: 0.02,
-    elevationDeg: 60,
-    azimuthDeg: 270,
-  });
+for (let i = 0; i < 3; i++) {
+  telemetryStore.addScan({ targetName: "Black Hole", category: "black_hole", gravity: 0.98, elevationDeg: 45, azimuthDeg: 180 });
 }
-const outcomeStarBias = telemetryStore.evaluatePendriveData();
-assert.strictEqual(outcomeStarBias, "sampling_bias");
-assert.strictEqual(telemetryStore.getState().biasMessage, "You have only taken Star images. The sample is biased.");
-console.log("✔ Test 3c: 10 Star scans triggers 'You have only taken Star images. The sample is biased.'");
+for (let i = 0; i < 2; i++) {
+  telemetryStore.addScan({ targetName: "Stars", category: "stars", gravity: 0.02, elevationDeg: 60, azimuthDeg: 270 });
+}
+const outcomeMajority = telemetryStore.evaluatePendriveData();
+assert.strictEqual(outcomeMajority, "sampling_bias", "Majority >= 5 scans of one kind must trigger sampling_bias");
+assert.strictEqual(telemetryStore.getState().biasMessage, "You have taken Planet images more (5/10). The sample is biased.");
+console.log("✔ Test 3b: Majority >= 5 Planet scans correctly triggers SAMPLING BIAS.");
 
-// Test 4: Format pendrive and test Representative Sample
-// 3 Black Hole + 4 Planets + 3 Distant Stars = 10
+// Test 4: Format pendrive and test Representative Sample (e.g. 3 BH + 4 Planets + 3 Stars = 10, all < 5)
 telemetryStore.formatPendrive();
 assert.strictEqual(telemetryStore.getState().scans.length, 0);
 

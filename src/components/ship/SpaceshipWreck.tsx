@@ -34,6 +34,9 @@ import { BulkheadDoors } from "./doors";
 import { ShipInteractables, type LogEntry } from "./interactables";
 import { shipAudio } from "../../audio/shipAudio";
 import { CockpitComputers } from "../../stations/computers";
+import { AntennaMesh } from "../../props/antenna/AntennaMesh";
+import { AntennaTerminalPedestal } from "../../props/antenna/AntennaTerminalPedestal";
+import { ANTENNA_WORLD_POS } from "../../props/antenna/antenna.config";
 
 export { PLAYER_SPAWN, SHIP_POSITION, resolveShipCollisions, CableSystem, BrokenCables, SparkSystem, getCablePositions };
 export type { Aabb, ShipModel };
@@ -57,12 +60,30 @@ export interface SpaceshipWreckProps {
   onInputLocked?: (locked: boolean) => void;
   /** Whether to render the Cockpit Computers installation (defaults to true) */
   includeCockpitComputers?: boolean;
+  /** Whether Section 3 is unlocked (Section 1 and 2 complete) */
+  isSection3Unlocked?: boolean;
+  /** Whether Section 3 2D bench is solved (candidate beacon found) */
+  isSection3Passed?: boolean;
+  /** Whether the beacon frequency handshake is verified at CORE-C */
+  isBeaconVerified?: boolean;
+  /** Callback when player accesses CORE-B for Section 3 */
+  onOpenSection3?: () => void;
+  /** Callback when player accesses CORE-C Comms Transceiver */
+  onOpenTransceiver?: () => void;
+  /** Callback when player accesses CORE-A Antenna Core */
+  onOpenAntennaCore?: () => void;
 }
 
 export function SpaceshipWreck({
   reducedMotion = false,
   quality = "high",
   includeCockpitComputers = true,
+  isSection3Unlocked = false,
+  isSection3Passed = false,
+  isBeaconVerified = false,
+  onOpenSection3,
+  onOpenTransceiver,
+  onOpenAntennaCore,
   playerPositionRef,
   onReady,
   onOpenLog,
@@ -208,6 +229,12 @@ export function SpaceshipWreck({
         onInteractionPrompt={onInteractionPrompt}
         onInputLocked={onInputLocked}
         reducedMotion={reducedMotion}
+        isSection3Unlocked={isSection3Unlocked}
+        isSection3Passed={isSection3Passed}
+        isBeaconVerified={isBeaconVerified}
+        onOpenSection3={onOpenSection3}
+        onOpenTransceiver={onOpenTransceiver}
+        onOpenAntennaCore={onOpenAntennaCore}
       />
 
       {/* ── 6. Reactor Core Volumetric Atmosphere Pulse ── */}
@@ -221,6 +248,16 @@ export function SpaceshipWreck({
 
       {/* ── 7. The Three Cockpit Computers (Avionics Flight Deck) ── */}
       {includeCockpitComputers && <CockpitComputers />}
+
+      {/* ── 8. Roof Comms Array Antenna Mast & Interactive Terminal ── */}
+      <AntennaMesh
+        position={[ANTENNA_WORLD_POS.x, ANTENNA_WORLD_POS.y, ANTENNA_WORLD_POS.z]}
+      />
+      <AntennaTerminalPedestal
+        position={[2.0, 0.04, 12.8]}
+        rotationY={0}
+        isUnlocked={isBeaconVerified}
+      />
     </group>
   );
 }

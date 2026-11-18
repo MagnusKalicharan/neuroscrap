@@ -89,9 +89,37 @@
   .terminal-enlarge-warning {
     display: flex;
   }
-  .terminal-stage-wrapper {
+  .terminal-stage-wrapper:not(.has-compact-mode) {
     display: none;
   }
+}
+
+/* ── Cyan / Amber HUD Theme (for SCRAP // SYSTEM CORE) ───────────────────── */
+.terminal-theme-cyan {
+  --term-outline-green: #0891b2;
+  --term-header-green: #22d3ee;
+  --term-dark-bg: #030d14;
+  --term-dark-panel: #02080d;
+  --term-pale-fill: #a5f3fc;
+  --term-pale-fill-bright: #cffafe;
+  --term-dark-text: #082f49;
+  --term-green-text: #38bdf8;
+  --term-green-text-bright: #67e8f9;
+  --term-green-text-dim: #0284c7;
+  --term-connector-green: #06b6d4;
+  --term-strip-green: #06b6d4;
+  --term-border-dark: #083344;
+}
+
+.terminal-theme-cyan .term-glow {
+  text-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
+}
+
+.terminal-theme-cyan.terminal-stage {
+  box-shadow:
+    0 0 50px rgba(6, 182, 212, 0.25),
+    inset 0 0 60px rgba(0, 0, 0, 0.85);
+  border-color: var(--term-outline-green);
 }
 
 /* ── CRT Overlays & Effects ─────────────────────────────────────────────── */

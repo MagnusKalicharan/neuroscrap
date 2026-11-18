@@ -219,9 +219,10 @@ export function MessageBody({
               <button
                 type="button"
                 onClick={onFormatPendrive}
-                className="mt-2 w-full py-2.5 px-4 bg-red-600 hover:bg-red-500 text-black font-bold uppercase tracking-wider text-xs rounded transition-all cursor-pointer shadow-md"
+                className="mt-2 w-full py-2.5 px-4 bg-red-600 hover:bg-red-500 text-black font-black uppercase tracking-wider text-xs rounded transition-all cursor-pointer shadow-md flex items-center justify-center gap-2"
               >
-                ↺ Clear Pendrive & Try Again
+                <span>↺</span>
+                <span>DELETE ALL SCANS & TRY AGAIN</span>
               </button>
             )}
           </div>

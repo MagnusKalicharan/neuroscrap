@@ -3,6 +3,10 @@
  * =============================================================
  * Zero external audio files required. All sounds synthesized in real-time.
  * Features 20-60ms gain ramps (zero click/pop artifacts) and throttled key ticks.
+ *
+ * Mute sync: terminalSound.syncMuteWithShipAudio(isMuted) must be called by the
+ * host (e.g. Game.tsx or AudioSettingsPanel) whenever shipAudio mute state changes.
+ * This keeps mute state in sync without a circular import dependency.
  */
 
 let audioCtx: AudioContext | null = null;
@@ -32,12 +36,25 @@ export const terminalSound = {
   setMuted(muted: boolean) {
     isMuted = muted;
     if (masterGain && audioCtx) {
-      masterGain.gain.setValueAtTime(muted ? 0 : 0.2, audioCtx.currentTime);
+      // 30ms ramp to avoid click/pop artifacts
+      masterGain.gain.linearRampToValueAtTime(muted ? 0 : 0.2, audioCtx.currentTime + 0.03);
     }
   },
 
   isMuted() {
     return isMuted;
+  },
+
+  /**
+   * Sync mute state with shipAudio (one-way: shipAudio → terminalSound).
+   * Call this from Game.tsx / AudioSettingsPanel whenever shipAudio.setMuted()
+   * is called, to keep terminal synth sounds in lockstep.
+   * Does NOT import shipAudio — avoids circular dependency.
+   */
+  syncMuteWithShipAudio(shipMuted: boolean) {
+    if (isMuted !== shipMuted) {
+      terminalSound.setMuted(shipMuted);
+    }
   },
 
   /** Power-on hum: 60Hz mains hum fading in over 300ms */
@@ -253,5 +270,142 @@ export const terminalSound = {
 
     osc.start(t);
     osc.stop(t + 0.075);
+  },
+
+  /** Different short mechanical clunk per measuring instrument */
+  playToolClunk(toolId: string) {
+    if (isMuted) return;
+    const ctx = getAudioContext();
+    if (!ctx || !masterGain) return;
+
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    switch (toolId) {
+      case "peak":
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(1200, t);
+        osc.frequency.exponentialRampToValueAtTime(750, t + 0.04);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(0.24, t + 0.003);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+        osc.start(t);
+        osc.stop(t + 0.05);
+        break;
+      case "average":
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(260, t);
+        osc.frequency.exponentialRampToValueAtTime(110, t + 0.06);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(0.28, t + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.065);
+        osc.start(t);
+        osc.stop(t + 0.07);
+        break;
+      case "width":
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(520, t);
+        osc.frequency.exponentialRampToValueAtTime(320, t + 0.045);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(0.22, t + 0.003);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+        osc.start(t);
+        osc.stop(t + 0.055);
+        break;
+      case "flicker":
+        osc.type = "square";
+        osc.frequency.setValueAtTime(840, t);
+        osc.frequency.exponentialRampToValueAtTime(420, t + 0.035);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(0.18, t + 0.002);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+        osc.start(t);
+        osc.stop(t + 0.045);
+        break;
+      case "period":
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(587.33, t); // D5
+        osc.frequency.exponentialRampToValueAtTime(880, t + 0.05);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(0.25, t + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
+        osc.start(t);
+        osc.stop(t + 0.06);
+        break;
+      case "color":
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(340, t);
+        osc.frequency.exponentialRampToValueAtTime(560, t + 0.055);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(0.24, t + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+        osc.start(t);
+        osc.stop(t + 0.065);
+        break;
+      case "noise":
+      default:
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(140, t);
+        osc.frequency.exponentialRampToValueAtTime(70, t + 0.05);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(0.20, t + 0.003);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
+        osc.start(t);
+        osc.stop(t + 0.06);
+        break;
+    }
+
+    osc.connect(gain);
+    gain.connect(masterGain);
+  },
+
+  /** Snap tick: crisp mechanical snap when tool seats on curve */
+  playSnapTick() {
+    if (isMuted) return;
+    const ctx = getAudioContext();
+    if (!ctx || !masterGain) return;
+
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(1600, t);
+    osc.frequency.exponentialRampToValueAtTime(600, t + 0.02);
+
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(0.26, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+
+    osc.connect(gain);
+    gain.connect(masterGain);
+
+    osc.start(t);
+    osc.stop(t + 0.028);
+  },
+
+  /** Jump counter tick: short pop for each rapid jump step */
+  playJumpTick(idx: number = 0) {
+    if (isMuted) return;
+    const ctx = getAudioContext();
+    if (!ctx || !masterGain) return;
+
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(1100 + (idx % 6) * 90, t);
+
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(0.12, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.018);
+
+    osc.connect(gain);
+    gain.connect(masterGain);
+
+    osc.start(t);
+    osc.stop(t + 0.02);
   },
 };

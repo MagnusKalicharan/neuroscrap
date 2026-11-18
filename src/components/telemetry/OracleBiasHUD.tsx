@@ -37,13 +37,13 @@ export function OracleBiasHUD() {
     {
       id: "bias_oracle_2",
       speaker: "ORACLE",
-      text: "I have deleted all scans from your pendrive cache. Go back out into the cargo bay, look up at the breach, and take screenshots again.",
+      text: "I have deleted all files from your pendrive. Go back out into the cargo bay, look up at the sky, and take screenshots again.",
       radio: true,
     },
     {
       id: "bias_oracle_3",
       speaker: "ORACLE",
-      text: "REMEMBER: We need a balanced sample! Collect at least 2 scans of the Black Hole, 2 of the Planets, and 2 of the Distant Stars (10 scans total).",
+      text: "REMEMBER: We need a balanced sample! Do not scan 5 or more of the same kind. Collect a balanced mix of Black Hole, Planet, and Distant Star images (10 scans total).",
       radio: true,
     },
   ];

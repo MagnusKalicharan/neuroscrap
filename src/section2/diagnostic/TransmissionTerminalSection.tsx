@@ -230,19 +230,6 @@ export function TransmissionTerminalSection({
             <span className="text-xs text-[var(--term-green-text)] opacity-70">
               PRESS [Q] OR ESC TO EXIT TERMINAL
             </span>
-            {process.env.NODE_ENV !== "production" && (
-              <button
-                type="button"
-                onClick={() => {
-                  diagnosticSound.playSwitchClack();
-                  relayStore.markAllScannedForTesting();
-                }}
-                className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#0f2e18] text-[#5dfa87] border border-[#178a38] hover:bg-[#1a4a27] hover:border-[#5dfa87] transition-all cursor-pointer shadow-sm active:scale-95"
-                title="Dev test shortcut: scan all 6 nodes and unlock console"
-              >
-                ⚡ [DEV] UNLOCK ALL 6 NODES
-              </button>
-            )}
           </div>
         </div>
       ) : (

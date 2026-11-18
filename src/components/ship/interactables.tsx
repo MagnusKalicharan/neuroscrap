@@ -66,6 +66,12 @@ interface InteractablesProps {
   onInteractionPrompt?: (prompt: string | null) => void;
   reducedMotion?: boolean;
   onInputLocked?: (locked: boolean) => void;
+  isSection3Unlocked?: boolean;
+  isSection3Passed?: boolean;
+  isBeaconVerified?: boolean;
+  onOpenSection3?: () => void;
+  onOpenTransceiver?: () => void;
+  onOpenAntennaCore?: () => void;
 }
 
 const _playerDistVec = new THREE.Vector3();
@@ -78,6 +84,12 @@ export function ShipInteractables({
   onInteractionPrompt,
   reducedMotion = false,
   onInputLocked,
+  isSection3Unlocked = false,
+  isSection3Passed = false,
+  isBeaconVerified = false,
+  onOpenSection3,
+  onOpenTransceiver,
+  onOpenAntennaCore,
 }: InteractablesProps) {
   const [steamValveClosed, setSteamValveClosed] = useState(false);
   const [dataPadCollected, setDataPadCollected] = useState(false);
@@ -214,11 +226,23 @@ export function ShipInteractables({
     _playerDistVec.set(-3.2, 1.8, -21);
     const distValve = p.distanceTo(_playerDistVec);
 
-    // 3. Bridge Terminal Console (x: 0, y: 1.25, z: -42.2)
-    _playerDistVec.set(0, 1.25, -42.2);
-    const distBridge = p.distanceTo(_playerDistVec);
+    // 3. Cockpit Dome CORE-B Command Core (x: 0, y: 1.3, z: -44.5)
+    _playerDistVec.set(0, 1.3, -44.5);
+    const distCoreB = p.distanceTo(_playerDistVec);
 
-    // 4. Data Pad (x: -8, y: 3.6, z: 12 on Mezzanine)
+    // 4. Cockpit Starboard CORE-C Comms Transceiver (x: 3.5, y: 1.3, z: -43.2)
+    _playerDistVec.set(3.5, 1.3, -43.2);
+    const distCoreC = p.distanceTo(_playerDistVec);
+
+    // 5. Cargo Bay Antenna Mast Terminal (x: 2.0, y: 1.2, z: 12.8)
+    _playerDistVec.set(2.0, 1.2, 12.8);
+    const distAntennaTerminal = p.distanceTo(_playerDistVec);
+
+    // 6. Cockpit Port CORE-A Antenna Core (x: -3.8, y: 1.3, z: -42.5)
+    _playerDistVec.set(-3.8, 1.3, -42.5);
+    const distCoreA = p.distanceTo(_playerDistVec);
+
+    // 7. Data Pad (x: -8, y: 3.6, z: 12 on Mezzanine)
     _playerDistVec.set(-8, 3.6, 12);
     const distPad = p.distanceTo(_playerDistVec);
 
@@ -230,8 +254,24 @@ export function ShipInteractables({
         : "PRESS [E] TO RESTORE SHIP POWER";
     } else if (distValve < 2.2 && !steamValveClosed) {
       nextPrompt = "PRESS [E] TO CLOSE COOLANT VALVE";
-    } else if (distBridge < 2.8) {
-      nextPrompt = "PRESS [E] TO READ FLIGHT RECORDER";
+    } else if (distCoreB < 2.8) {
+      if (isSection3Unlocked) {
+        nextPrompt = "PRESS [E] TO ACCESS CORE-B (ANALYZE DEEP-SPACE SIGNALS)";
+      } else {
+        nextPrompt = "CORE-B AVIONICS // OFFLINE (AWAITING TRANSMISSION RELAY)";
+      }
+    } else if (distCoreC < 2.8) {
+      if (isSection3Unlocked) {
+        nextPrompt = "PRESS [E] TO ACCESS COMMS TRANSCEIVER // TRANSMIT BEACON TARGET ID";
+      } else {
+        nextPrompt = "COMMS TRANSCEIVER // OFFLINE (AWAITING TRANSMISSION RELAY)";
+      }
+    } else if (distAntennaTerminal < 2.8 || distCoreA < 2.8) {
+      if (isBeaconVerified) {
+        nextPrompt = "PRESS [E] TO ACCESS ANTENNA TERMINAL // NEURAL TRAINING LAB";
+      } else {
+        nextPrompt = "ANTENNA COPROCESSOR // STANDBY (TRANSMIT BEACON HANDSHAKE FIRST)";
+      }
     } else if (distPad < 2.2 && !dataPadCollected) {
       nextPrompt = "PRESS [E] TO PICK UP ENCRYPTED DATA PAD";
     } else {
@@ -262,9 +302,21 @@ export function ShipInteractables({
       } else if (prompt.includes("CLOSE COOLANT VALVE")) {
         setSteamValveClosed(true);
         shipAudio.playConsoleBeep();
-      } else if (prompt.includes("FLIGHT RECORDER")) {
-        shipAudio.playConsoleBeep();
-        onOpenLog?.(SHIP_LOGS.bridge_log);
+      } else if (prompt.includes("ACCESS CORE-B")) {
+        if (isSection3Unlocked) {
+          shipAudio.playConsoleBeep();
+          onOpenSection3?.();
+        }
+      } else if (prompt.includes("COMMS TRANSCEIVER")) {
+        if (isSection3Unlocked) {
+          shipAudio.playConsoleBeep();
+          onOpenTransceiver?.();
+        }
+      } else if (prompt.includes("ACCESS ANTENNA") || prompt.includes("ANTENNA TERMINAL")) {
+        if (isBeaconVerified) {
+          shipAudio.playConsoleBeep();
+          onOpenAntennaCore?.();
+        }
       } else if (
         prompt.includes("CREW TERMINAL") ||
         prompt.includes("TELEMETRY PENDRIVE") ||
@@ -282,7 +334,18 @@ export function ShipInteractables({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [powerRestored, onRestorePower, onOpenLog, onOpenCrewTerminal]);
+  }, [
+    powerRestored,
+    onRestorePower,
+    onOpenLog,
+    onOpenCrewTerminal,
+    isSection3Unlocked,
+    isSection3Passed,
+    isBeaconVerified,
+    onOpenSection3,
+    onOpenTransceiver,
+    onOpenAntennaCore,
+  ]);
 
   return (
     <group name="ship-interactables">

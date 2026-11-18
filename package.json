@@ -14,13 +14,20 @@
     "test:tasks": "node --experimental-strip-types src/ui/tasks/taskStore.test.ts",
     "test:telemetry": "node --experimental-strip-types src/components/telemetry/telemetryStore.test.ts",
     "test:relay": "node --experimental-strip-types src/section2/evaluateConfig.test.ts",
-    "test:diagnostic": "node --experimental-strip-types src/section2/diagnostic/diagnostic.test.ts"
+    "test:diagnostic": "node --experimental-strip-types src/section2/diagnostic/diagnostic.test.ts",
+    "test:features": "node --experimental-strip-types src/section3/features.test.ts",
+    "test:bench2d": "node --experimental-strip-types src/section3/bench2d.test.ts",
+    "test:neural": "node --experimental-strip-types src/section4/neural.test.ts",
+    "test:gear": "node --experimental-strip-types src/ending/ship/gearConnection.test.ts",
+    "test:audit": "node --experimental-strip-types src/ending/ship/honestAudit.test.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
+    "@types/katex": "^0.16.8",
     "@types/three": "^0.186.0",
     "framer-motion": "^14.6.0",
+    "katex": "^0.19.1",
     "lucide-react": "^1.61.0",
     "next": "16.4.3",
     "react": "19.3.0",

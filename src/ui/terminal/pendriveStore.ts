@@ -10,6 +10,7 @@ export interface PendriveState {
   hasPendrive: boolean;
   uploadedBatches: string[];
   deletedImageIds: string[];
+  section1Complete: boolean;
 }
 
 const STORAGE_KEY = "neuroscrap_pendrive_store_v1";
@@ -18,6 +19,7 @@ const DEFAULT_STATE: PendriveState = {
   hasPendrive: true,
   uploadedBatches: [],
   deletedImageIds: [],
+  section1Complete: false,
 };
 
 let currentState: PendriveState = loadStoredState();
@@ -34,10 +36,21 @@ function loadStoredState(): PendriveState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_STATE };
     const parsed = JSON.parse(raw);
+    const validBatches = Array.isArray(parsed.uploadedBatches)
+      ? parsed.uploadedBatches.filter((b: string) => b && b !== "BATCH_DEV_AUTO")
+      : [];
+    const tRaw = localStorage.getItem("neuroscrap_telemetry_pendrive_v1");
+    let hasScans = false;
+    try {
+      const parsedT = tRaw ? JSON.parse(tRaw) : null;
+      hasScans = Array.isArray(parsedT?.scans) && parsedT.scans.length >= 10;
+    } catch {}
+    const isDone = Boolean(hasScans && parsed.section1Complete && validBatches.length > 0);
     return {
       hasPendrive: Boolean(parsed.hasPendrive ?? true),
-      uploadedBatches: Array.isArray(parsed.uploadedBatches) ? parsed.uploadedBatches : [],
+      uploadedBatches: validBatches,
       deletedImageIds: Array.isArray(parsed.deletedImageIds) ? parsed.deletedImageIds : [],
+      section1Complete: isDone,
     };
   } catch {
     return { ...DEFAULT_STATE };
@@ -76,6 +89,11 @@ export const pendriveStore = {
       };
       notify();
     }
+  },
+
+  setSection1Complete(complete: boolean) {
+    currentState = { ...currentState, section1Complete: complete };
+    notify();
   },
 
   deleteImage(id: string) {

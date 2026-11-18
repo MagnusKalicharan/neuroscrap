@@ -181,6 +181,19 @@ export default function Scene1({
     }, 600);
   }, [canvasRef, goTo]);
 
+  // Auto-advance past TitleScreen on mount (TitleScreen removed per user request)
+  useEffect(() => {
+    if (state === "title") {
+      const skipPref = typeof window !== "undefined" && localStorage.getItem("scene1_always_skip") === "true";
+      const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      if (skipPref || urlParams?.get("skip") === "1") {
+        goTo("handoff");
+      } else {
+        handlePlayClick();
+      }
+    }
+  }, [state, handlePlayClick, goTo]);
+
   // ─────────────────────────────────────────────────────────────
   // HOLD STATE REACHED (From BootSequence)
   // ─────────────────────────────────────────────────────────────
@@ -297,42 +310,8 @@ export default function Scene1({
 
   return (
     <div className="scene1-container">
-      {/* ── TITLE STATE ── */}
-      {state === "title" && (
-        <TitleScreen
-          onPlayClick={handlePlayClick}
-          onReplayIntro={handleReplayIntro}
-          shipLoadProgress={isAssetsLoaded ? 1.0 : loadingPercent / 100}
-          reduceMotion={reduceMotion}
-          onToggleReduceMotion={(enabled) => {
-            setReduceMotion(enabled);
-            try {
-              localStorage.setItem("scene1_reduce_motion", enabled ? "true" : "false");
-            } catch {}
-          }}
-          textSize={textSize}
-          onChangeTextSize={(size) => {
-            setTextSize(size);
-            try {
-              localStorage.setItem("scene1_text_size", size);
-            } catch {}
-          }}
-          graphicsQuality={graphicsQuality}
-          onChangeGraphicsQuality={(quality) => {
-            setGraphicsQuality(quality);
-            try {
-              localStorage.setItem("scene1_graphics_quality", quality);
-            } catch {}
-          }}
-          alwaysSkipIntro={alwaysSkipIntro}
-          onChangeAlwaysSkipIntro={(skip) => {
-            setAlwaysSkipIntro(skip);
-            try {
-              localStorage.setItem("scene1_always_skip", skip ? "true" : "false");
-            } catch {}
-          }}
-        />
-      )}
+      {/* ── TITLE STATE (Auto-advances; TitleScreen removed per user request) ── */}
+      {state === "title" && null}
 
       {/* ── STARTING STATE (0.6s FADE-OUT TO BLACK) ── */}
       {state === "starting" && (

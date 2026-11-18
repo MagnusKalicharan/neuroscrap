@@ -67,7 +67,7 @@ export function RelayInteractionManager({ collidersRef }: RelayInteractionManage
   }, []);
 
   const scannedIds = useMemo(
-    () => new Set(lineProps.scannedNodeIds),
+    () => (isImagesValidated() ? new Set(lineProps.scannedNodeIds) : new Set<string>()),
     [lineProps.scannedNodeIds]
   );
 
