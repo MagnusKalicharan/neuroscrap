@@ -119,12 +119,7 @@ The title screen features a real-time procedural 3D living ecosystem:
 * **Scan-Pulse Reveal**: When the page loads, an expanding holographic wireframe survey wave scans across the terrain, progressively revealing the moss, foliage, and pollen motes.
 * **Articulated Solarpunk Scrap Robot**: Perched upon the peak crest of the moss arch, Sylva watches and dynamically tracks your cursor in full 3D space with inverse kinematic neck rotations, idle breathing, and acoustic chirps when clicked.
 
-### 2. Deep-Space Crash Site Environment (`/game`)
-* **Ray-Marched Schwarzschild Black Hole**: True general relativity raytracer solving the null geodesic metric \(a = -\frac{3}{2} h^2 \frac{\vec{r}}{|\vec{r}|^5}\). Features an absolute event horizon shadow, Shakura–Sunyaev temperature gradient, Keplerian shear accretion gas with turbulence noise, relativistic Doppler beaming ($g^3$), and a bright photon sphere ring.
-* **Celestial System**: High-dynamic-range starfield (9,000 stars), Azure Gas Giant (*Aurelia Prime*), Molten Magma Moon (*Ignis-IV*), and Emerald Ocean World (*Thalassa*).
-* **Crash Site Wreckage**: Giant conical rocket engine bells with cooling manifolds, sheared cylindrical rocket fuselage lined with hexagonal heat-shield tiles, shattered solar arrays, and an active quantum reactor core pulsing Cherenkov radiation.
-
-### 3. Neon Noir UI Design System
+### 2. Neon Noir UI Design System
 Inspired by *Blade Runner* and industrial retro-futurism:
 * **Chamfered Clip-Path Geometry**: Diagonal corner-cut panels and interactive buttons with zero boxy card clutter.
 * **Dual SVG Border Beams**: High-frequency animated laser pulses tracing button perimeters.
