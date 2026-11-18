@@ -230,6 +230,6 @@ npm run start
 
 <div align="center">
 
-**NEURO-SCRAP** • *Repair Your Brain. Repair The Ship.* • Built with ❤️ for computer science and space exploration.
+**NEURO-SCRAP** •
 
 </div>
