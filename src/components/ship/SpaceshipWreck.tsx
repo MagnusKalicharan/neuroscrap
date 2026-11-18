@@ -256,7 +256,7 @@ export function SpaceshipWreck({
       <AntennaTerminalPedestal
         position={[2.0, 0.04, 12.8]}
         rotationY={0}
-        isUnlocked={isBeaconVerified}
+        isUnlocked={Boolean(isBeaconVerified || isSection3Passed)}
       />
     </group>
   );

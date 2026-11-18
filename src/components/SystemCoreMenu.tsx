@@ -335,7 +335,7 @@ export function SystemCoreMenu({
   const relayState = relayStore.getState();
   const isSec2Done = isSec1Done && Boolean(relayState.diagnosticPassed);
   const s3State = section3Store.getSnapshot();
-  const isSec3Done = isSec2Done && Boolean(s3State.passed) && Boolean(s3State.beaconVerified);
+  const isSec3Done = isSec2Done && (Boolean(s3State.passed) || Boolean(s3State.beaconVerified));
   const s4State = section4Store.getState();
   const isSec4Done = isSec3Done && Boolean(s4State.labState.isComplete);
 

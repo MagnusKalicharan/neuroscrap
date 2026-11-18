@@ -234,9 +234,11 @@ export function ShipInteractables({
     _playerDistVec.set(3.5, 1.3, -43.2);
     const distCoreC = p.distanceTo(_playerDistVec);
 
-    // 5. Cargo Bay Antenna Mast Terminal (x: 2.0, y: 1.2, z: 12.8)
+    // 5. Cargo Bay Antenna Mast & Pedestal Terminal (x: 2.0, y: 1.2, z: 12.8 / mast at z: 13.6)
     _playerDistVec.set(2.0, 1.2, 12.8);
     const distAntennaTerminal = p.distanceTo(_playerDistVec);
+    _playerDistVec.set(2.2, 1.2, 13.6);
+    const distAntennaMast = p.distanceTo(_playerDistVec);
 
     // 6. Cockpit Port CORE-A Antenna Core (x: -3.8, y: 1.3, z: -42.5)
     _playerDistVec.set(-3.8, 1.3, -42.5);
@@ -245,6 +247,9 @@ export function ShipInteractables({
     // 7. Data Pad (x: -8, y: 3.6, z: 12 on Mezzanine)
     _playerDistVec.set(-8, 3.6, 12);
     const distPad = p.distanceTo(_playerDistVec);
+
+    const canAccessAntenna = Boolean(isBeaconVerified || isSection3Passed);
+    const isNearAntenna = distAntennaTerminal < 3.8 || distAntennaMast < 3.8 || distCoreA < 3.2;
 
     let nextPrompt: string | null = null;
 
@@ -266,8 +271,8 @@ export function ShipInteractables({
       } else {
         nextPrompt = "COMMS TRANSCEIVER // OFFLINE (AWAITING TRANSMISSION RELAY)";
       }
-    } else if (distAntennaTerminal < 2.8 || distCoreA < 2.8) {
-      if (isBeaconVerified) {
+    } else if (isNearAntenna) {
+      if (canAccessAntenna) {
         nextPrompt = "PRESS [E] TO ACCESS ANTENNA TERMINAL // NEURAL TRAINING LAB";
       } else {
         nextPrompt = "ANTENNA COPROCESSOR // STANDBY (TRANSMIT BEACON HANDSHAKE FIRST)";
@@ -292,9 +297,11 @@ export function ShipInteractables({
   // Stable Keydown listener for interaction [E]
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.code !== "KeyE") return;
+      if (e.code !== "KeyE" && e.key.toLowerCase() !== "e") return;
       const prompt = activePromptRef.current;
       if (!prompt) return;
+
+      const canAccess = Boolean(isBeaconVerified || isSection3Passed);
 
       if (prompt.includes("RESTORE SHIP POWER") && !powerRestored) {
         shipAudio.playPowerRestoreSequence();
@@ -313,7 +320,7 @@ export function ShipInteractables({
           onOpenTransceiver?.();
         }
       } else if (prompt.includes("ACCESS ANTENNA") || prompt.includes("ANTENNA TERMINAL")) {
-        if (isBeaconVerified) {
+        if (canAccess) {
           shipAudio.playConsoleBeep();
           onOpenAntennaCore?.();
         }

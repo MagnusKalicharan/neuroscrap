@@ -3556,10 +3556,10 @@ export default function Game({ initialEnding = false }: { initialEnding?: boolea
   const isSection1Done = isImagesDone;
   const isSection2Done = isSection1Done && Boolean(relayStoreState.diagnosticPassed);
   const isSection3Unlocked = isSection1Done && isSection2Done;
-  const isSection3Passed = isSection3Unlocked && Boolean(s3State.passed);
+  const isSection3Passed = isSection3Unlocked && (Boolean(s3State.passed) || Boolean(s3State.beaconVerified));
   const isBeaconVerified = isSection3Unlocked && Boolean(s3State.beaconVerified);
-  const isSection3Done = isSection3Passed && isBeaconVerified;
-  const isSection4Unlocked = isSection3Done;
+  const isSection3Done = isSection3Passed || isBeaconVerified;
+  const isSection4Unlocked = isSection3Unlocked && (isBeaconVerified || isSection3Passed);
   const diagnosticOpen = relayStoreState.diagnosticConsoleOpen;
 
   const isAnyModalOpen =
@@ -3976,7 +3976,7 @@ export default function Game({ initialEnding = false }: { initialEnding?: boolea
                 }
               }}
               onOpenAntennaCore={() => {
-                if (isSection4Unlocked) {
+                if (isBeaconVerified || isSection4Unlocked) {
                   setSection4Open(true);
                 }
               }}
@@ -4187,7 +4187,7 @@ export default function Game({ initialEnding = false }: { initialEnding?: boolea
                 interactionPrompt.includes("ACCESS ANTENNA") ||
                 interactionPrompt.includes("ANTENNA TERMINAL")
               ) {
-                if (isBeaconVerified) {
+                if (isBeaconVerified || isSection4Unlocked) {
                   setSection4Open(true);
                 }
               } else if (

@@ -167,6 +167,7 @@ export function CommsTransceiverModal({
         terminalSound.playSuccessChime();
         setVerdictStatus("success");
         section3Store.setBeaconVerified(true);
+        section3Store.setPassed(true);
 
         // Register task for Section 4
         taskStore.registerTask({

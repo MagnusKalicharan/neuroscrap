@@ -105,6 +105,8 @@ function loadFromStorage(): boolean {
         bursts: typeof parsed.bursts === "number" ? parsed.bursts : 3,
         passed: Boolean(parsed.passed),
         unknownOpened: Boolean(parsed.unknownOpened),
+        beaconVerified: Boolean(parsed.beaconVerified),
+        transitionDialogueSeen: Boolean(parsed.transitionDialogueSeen),
       };
       return true;
     }
