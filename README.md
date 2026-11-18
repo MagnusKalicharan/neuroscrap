@@ -225,6 +225,6 @@ npm run start
 
 <div align="center">
 
-**NEURO-SCRAP** •
+• **NEURO-SCRAP** •
 
 </div>
