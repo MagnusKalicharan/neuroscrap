@@ -1223,12 +1223,12 @@ export function buildShipModel({
   // Solid collider for Abandoned Maintenance Robot SCRAP-06 (Cockpit port wall)
   colliders.push({
     id: "scrap-06",
-    minX: -11.0,
-    maxX: -10.18,
-    minZ: -39.18,
-    maxZ: -38.22,
+    minX: -11.08,
+    maxX: -10.05,
+    minZ: -39.25,
+    maxZ: -38.15,
     minY: 0.0,
-    maxY: 1.0,
+    maxY: 1.15,
   });
 
   // D) Cargo Bay Shipping Containers & Heavy Crates

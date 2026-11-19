@@ -10,6 +10,9 @@
  *   maintenance robot silhouette with rounded corners, cream-yellow weathered
  *   painted casing, twin circular optics, bent broken antenna, thin articulated
  *   mechanical limbs).
+ * - Full damaged industrial torso chassis with front chest armor plate, faded
+ *   hazard striping, breached maintenance bay with exposed internal circuitry,
+ *   lower tech grille, and rear power canister backpack resting against the hull.
  * - Completely stationary, lifeless pose: slumped against the left cockpit wall,
  *   head tilted slightly downward, one arm missing with exposed wiring & loose
  *   hanging cable resting on the floor, remaining arm limp at an unnatural angle,
@@ -33,17 +36,17 @@ export const SCRAP06_POSITION: [number, number, number] = [-10.58, FLOOR_Y, -38.
 export const SCRAP06_ROTATION_Y = 1.28;
 
 /** Target point used by the ping scanner in Game.tsx */
-export const SCRAP06_SCAN_TARGET = new THREE.Vector3(-10.58, FLOOR_Y + 0.36, -38.7);
+export const SCRAP06_SCAN_TARGET = new THREE.Vector3(-10.58, FLOOR_Y + 0.62, -38.7);
 
 /** Solid AABB collider registered in shipModel.ts so the player cannot walk through SCRAP-06 */
 export const SCRAP06_COLLIDER = {
   id: "scrap-06",
-  minX: -11.0,
-  maxX: -10.18,
-  minZ: -39.18,
-  maxZ: -38.22,
+  minX: -11.08,
+  maxX: -10.05,
+  minZ: -39.25,
+  maxZ: -38.15,
   minY: 0.0,
-  maxY: 1.0,
+  maxY: 1.15,
 };
 
 // Deterministic pseudo-random helper so weathering textures look consistent across sessions
@@ -191,7 +194,107 @@ function createScrap06CasingTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-// ── 2. Damaged Serial-Number Label Plate ("SCRAP-06") ─────────────────────
+// ── 2. Chest Armor Plate Texture (Hazard Stripes & Stencil Marking) ───────
+function createChestHazardTexture(): THREE.CanvasTexture {
+  const w = 512;
+  const h = 320;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  const rand = mulberry32(60688);
+
+  // Faded cream-yellow base matching casing
+  ctx.fillStyle = "#cfc08f";
+  ctx.fillRect(0, 0, w, h);
+
+  // Upper industrial hazard stripe band (matching SCRAP family safety markings)
+  const stripeY = 28;
+  const stripeH = 110;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(18, stripeY, w - 36, stripeH);
+  ctx.clip();
+
+  // Amber base for hazard stripes
+  ctx.fillStyle = "#c88a2a";
+  ctx.fillRect(18, stripeY, w - 36, stripeH);
+
+  // Dark slate/charcoal diagonal hazard stripes
+  ctx.fillStyle = "#262b32";
+  const stripeWidth = 42;
+  for (let x = -stripeH * 2; x < w + stripeH * 2; x += stripeWidth * 2) {
+    ctx.beginPath();
+    ctx.moveTo(x, stripeY);
+    ctx.lineTo(x + stripeWidth, stripeY);
+    ctx.lineTo(x + stripeWidth - stripeH * 0.8, stripeY + stripeH);
+    ctx.lineTo(x - stripeH * 0.8, stripeY + stripeH);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Weathering grime wash
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "rgba(220, 210, 180, 0.2)");
+  grad.addColorStop(0.5, "rgba(60, 52, 38, 0.15)");
+  grad.addColorStop(1, "rgba(25, 22, 18, 0.65)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Border and rivet seams
+  ctx.strokeStyle = "rgba(35, 32, 28, 0.75)";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(16, 16, w - 32, h - 32);
+
+  // Stencil markings: SCRAP-06 // HEAVY MAINT.
+  ctx.font = "bold 24px monospace";
+  ctx.fillStyle = "rgba(28, 25, 20, 0.85)";
+  ctx.fillText("SCRAP-06 // HEAVY MAINT.", 34, 195);
+  ctx.font = "bold 14px monospace";
+  ctx.fillStyle = "rgba(45, 40, 32, 0.65)";
+  ctx.fillText("SYSTEM FAILURE // AUX POWER DEPLETED", 34, 225);
+
+  // Rust and chipped paint patches across stripes
+  for (let i = 0; i < 30; i++) {
+    const rx = rand() * w;
+    const ry = rand() * h;
+    ctx.fillStyle = rand() > 0.4 ? "#633218" : "#242930";
+    ctx.beginPath();
+    ctx.ellipse(rx, ry, 3 + rand() * 12, 2 + rand() * 8, rand() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Scratches across the hazard paint
+  for (let i = 0; i < 45; i++) {
+    const sx = rand() * w;
+    const sy = rand() * h;
+    const slen = 8 + rand() * 38;
+    const sang = rand() * Math.PI * 2;
+    ctx.strokeStyle = rand() > 0.4 ? "rgba(30, 34, 40, 0.75)" : "rgba(235, 230, 215, 0.45)";
+    ctx.lineWidth = 1 + rand() * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + Math.cos(sang) * slen, sy + Math.sin(sang) * slen);
+    ctx.stroke();
+  }
+
+  // Heavy soot smudge across the damaged left side
+  const soot = ctx.createRadialGradient(80, 160, 10, 80, 160, 140);
+  soot.addColorStop(0, "rgba(14, 16, 18, 0.75)");
+  soot.addColorStop(0.6, "rgba(20, 22, 24, 0.35)");
+  soot.addColorStop(1, "rgba(20, 22, 24, 0)");
+  ctx.fillStyle = soot;
+  ctx.fillRect(0, 0, w, h);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  return tex;
+}
+
+// ── 3. Damaged Serial-Number Label Plate ("SCRAP-06") ─────────────────────
 function createSerialPlateTexture(): THREE.CanvasTexture {
   const w = 256;
   const h = 96;
@@ -259,7 +362,7 @@ function createSerialPlateTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-// ── 3. Cracked Cyan-Greenish Eye Display Texture ──────────────────────────
+// ── 4. Cracked Cyan-Greenish Eye Display Texture ──────────────────────────
 function createCrackedEyeTexture(): THREE.CanvasTexture {
   const size = 128;
   const canvas = document.createElement("canvas");
@@ -328,7 +431,7 @@ function createCrackedEyeTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-// ── 4. Subtle Floor Grime / Oil Reflection Patch Texture ──────────────────
+// ── 5. Subtle Floor Grime / Oil Reflection Patch Texture ──────────────────
 function createFloorReflectionTexture(): THREE.CanvasTexture {
   const size = 256;
   const canvas = document.createElement("canvas");
@@ -347,7 +450,7 @@ function createFloorReflectionTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-// ── 5. Soft Smoke Wisp Texture ────────────────────────────────────────────
+// ── 6. Soft Smoke Wisp Texture ────────────────────────────────────────────
 function createSmokeTexture(): THREE.CanvasTexture {
   const size = 64;
   const canvas = document.createElement("canvas");
@@ -365,8 +468,8 @@ function createSmokeTexture(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(canvas);
 }
 
-// ── Rounded Cube Geometry Builder (matches reference robot's soft boxy head) ──
-function createRoundedHeadGeometry(w: number, h: number, d: number, r: number): THREE.BufferGeometry {
+// ── Rounded Box Geometry Builder (smooth beveled industrial robot casing) ──
+function createRoundedBoxGeometry(w: number, h: number, d: number, r: number): THREE.BufferGeometry {
   const shape = new THREE.Shape();
   const hw = w * 0.5 - r;
   const hh = h * 0.5 - r;
@@ -391,7 +494,7 @@ function createRoundedHeadGeometry(w: number, h: number, d: number, r: number): 
   });
   geom.center();
 
-  // Normalize planar/box UVs so the weathered canvas texture maps cleanly across all faces
+  // Normalize planar/box UVs so textures wrap cleanly across all 6 faces
   const pos = geom.attributes.position;
   const norm = geom.attributes.normal;
   const uv = geom.attributes.uv;
@@ -403,11 +506,11 @@ function createRoundedHeadGeometry(w: number, h: number, d: number, r: number): 
     const ny = Math.abs(norm.getY(i));
     const nz = Math.abs(norm.getZ(i));
     if (nz >= nx && nz >= ny) {
-      uv.setXY(i, (px / w) + 0.5, (py / h) + 0.5);
+      uv.setXY(i, px / w + 0.5, py / h + 0.5);
     } else if (nx >= ny) {
-      uv.setXY(i, (pz / d) + 0.5, (py / h) + 0.5);
+      uv.setXY(i, pz / d + 0.5, py / h + 0.5);
     } else {
-      uv.setXY(i, (px / w) + 0.5, (pz / d) + 0.5);
+      uv.setXY(i, px / w + 0.5, pz / d + 0.5);
     }
   }
   uv.needsUpdate = true;
@@ -521,51 +624,65 @@ export function Scrap06Unit({
   // ── Procedural Textures, Geometries & Materials ──────────────────────────
   const assets = useMemo(() => {
     const casingTex = createScrap06CasingTexture();
+    const chestTex = createChestHazardTexture();
     const serialTex = createSerialPlateTexture();
     const crackedEyeTex = createCrackedEyeTexture();
     const oilTex = createFloorReflectionTexture();
     const smokeTex = createSmokeTexture();
 
-    const headGeo = createRoundedHeadGeometry(0.45, 0.34, 0.37, 0.042);
+    // Robot Anatomical Geometries
+    const torsoGeo = createRoundedBoxGeometry(0.54, 0.58, 0.42, 0.045);
+    const headGeo = createRoundedBoxGeometry(0.44, 0.32, 0.36, 0.040);
+    const chestPlateGeo = createRoundedBoxGeometry(0.46, 0.28, 0.035, 0.018);
     const sparkGeo = new THREE.BoxGeometry(0.014, 0.014, 0.065);
 
-    // Loose dangling cable from damaged left shoulder down to the floor
+    // Loose dangling cable from damaged left shoulder down to the floor deck
     const danglingCableCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-0.24, 0.31, 0.02),
-      new THREE.Vector3(-0.34, 0.22, 0.09),
-      new THREE.Vector3(-0.39, 0.09, 0.17),
-      new THREE.Vector3(-0.46, 0.022, 0.25),
-      new THREE.Vector3(-0.54, 0.018, 0.31),
+      new THREE.Vector3(-0.26, 0.50, 0.12),
+      new THREE.Vector3(-0.35, 0.38, 0.18),
+      new THREE.Vector3(-0.41, 0.22, 0.24),
+      new THREE.Vector3(-0.47, 0.10, 0.30),
+      new THREE.Vector3(-0.53, 0.022, 0.36),
+      new THREE.Vector3(-0.61, 0.016, 0.42),
     ]);
-    const danglingCableGeo = new THREE.TubeGeometry(danglingCableCurve, 18, 0.014, 6, false);
+    const danglingCableGeo = new THREE.TubeGeometry(danglingCableCurve, 20, 0.014, 6, false);
 
     // Exposed frayed wires at the torn left shoulder socket
     const wireCurves = [
       new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-0.22, 0.33, 0.04),
-        new THREE.Vector3(-0.31, 0.31, 0.08),
-        new THREE.Vector3(-0.35, 0.25, 0.11),
+        new THREE.Vector3(-0.02, 0.02, 0.0),
+        new THREE.Vector3(-0.08, 0.05, 0.03),
+        new THREE.Vector3(-0.13, 0.02, 0.06),
       ]),
       new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-0.22, 0.31, -0.02),
-        new THREE.Vector3(-0.30, 0.26, -0.04),
-        new THREE.Vector3(-0.33, 0.19, 0.0),
+        new THREE.Vector3(-0.02, -0.01, -0.01),
+        new THREE.Vector3(-0.07, -0.03, -0.02),
+        new THREE.Vector3(-0.11, -0.05, 0.01),
       ]),
       new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-0.22, 0.35, 0.01),
-        new THREE.Vector3(-0.28, 0.38, 0.06),
-        new THREE.Vector3(-0.32, 0.34, 0.09),
+        new THREE.Vector3(-0.02, 0.03, 0.01),
+        new THREE.Vector3(-0.06, 0.07, 0.03),
+        new THREE.Vector3(-0.10, 0.06, 0.06),
       ]),
     ];
     const exposedWireGeos = wireCurves.map(
       (c) => new THREE.TubeGeometry(c, 8, 0.0055, 5, false)
     );
 
+    // Internal exposed wire loops inside the breached chest maintenance bay
+    const internalWireCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.04, -0.03, -0.01),
+      new THREE.Vector3(-0.01, 0.02, 0.02),
+      new THREE.Vector3(0.04, -0.01, 0.01),
+      new THREE.Vector3(0.02, -0.04, -0.01),
+    ]);
+    const internalWiresGeo = new THREE.TubeGeometry(internalWireCurve, 12, 0.004, 5, false);
+
     // Exposed wire loop at remaining right arm elbow joint
     const elbowWireCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0.01, -0.09, 0.02),
-      new THREE.Vector3(0.055, -0.14, 0.045),
-      new THREE.Vector3(0.02, -0.19, 0.02),
+      new THREE.Vector3(0.01, -0.11, 0.02),
+      new THREE.Vector3(0.055, -0.16, 0.045),
+      new THREE.Vector3(0.02, -0.21, 0.02),
     ]);
     const elbowWireGeo = new THREE.TubeGeometry(elbowWireCurve, 8, 0.0045, 5, false);
 
@@ -600,6 +717,12 @@ export function Scrap06Unit({
       metalness: 0.22,
     });
 
+    const chestMat = new THREE.MeshStandardMaterial({
+      map: chestTex,
+      roughness: 0.68,
+      metalness: 0.26,
+    });
+
     const serialMat = new THREE.MeshStandardMaterial({
       map: serialTex,
       roughness: 0.62,
@@ -607,21 +730,21 @@ export function Scrap06Unit({
     });
 
     const darkFrameMat = new THREE.MeshStandardMaterial({
-      color: 0x262d35,
-      roughness: 0.68,
+      color: 0x242a30,
+      roughness: 0.70,
       metalness: 0.58,
     });
 
     const rustedJointMat = new THREE.MeshStandardMaterial({
-      color: 0x5c3622,
+      color: 0x583420,
       roughness: 0.82,
-      metalness: 0.45,
+      metalness: 0.42,
     });
 
     const brassTrimMat = new THREE.MeshStandardMaterial({
-      color: 0x8f7946,
+      color: 0x8b7542,
       roughness: 0.58,
-      metalness: 0.55,
+      metalness: 0.52,
     });
 
     const dustMat = new THREE.MeshStandardMaterial({
@@ -643,7 +766,7 @@ export function Scrap06Unit({
     });
 
     const deadEyeMat = new THREE.MeshStandardMaterial({
-      color: 0x0b1215,
+      color: 0x0a1012,
       emissive: new THREE.Color(0x000000),
       emissiveIntensity: 0.0,
       roughness: 0.28,
@@ -658,7 +781,7 @@ export function Scrap06Unit({
     });
 
     const cableRubberMat = new THREE.MeshStandardMaterial({
-      color: 0x171a1f,
+      color: 0x16181c,
       roughness: 0.88,
       metalness: 0.12,
     });
@@ -702,18 +825,23 @@ export function Scrap06Unit({
 
     return {
       casingTex,
+      chestTex,
       serialTex,
       crackedEyeTex,
       oilTex,
       smokeTex,
+      torsoGeo,
       headGeo,
+      chestPlateGeo,
       sparkGeo,
       danglingCableGeo,
       exposedWireGeos,
+      internalWiresGeo,
       elbowWireGeo,
       floorWire1,
       floorWire2,
       casingMat,
+      chestMat,
       serialMat,
       darkFrameMat,
       rustedJointMat,
@@ -735,18 +863,23 @@ export function Scrap06Unit({
   useEffect(() => {
     return () => {
       assets.casingTex.dispose();
+      assets.chestTex.dispose();
       assets.serialTex.dispose();
       assets.crackedEyeTex.dispose();
       assets.oilTex.dispose();
       assets.smokeTex.dispose();
+      assets.torsoGeo.dispose();
       assets.headGeo.dispose();
+      assets.chestPlateGeo.dispose();
       assets.sparkGeo.dispose();
       assets.danglingCableGeo.dispose();
       assets.exposedWireGeos.forEach((g) => g.dispose());
+      assets.internalWiresGeo.dispose();
       assets.elbowWireGeo.dispose();
       assets.floorWire1.dispose();
       assets.floorWire2.dispose();
       assets.casingMat.dispose();
+      assets.chestMat.dispose();
       assets.serialMat.dispose();
       assets.darkFrameMat.dispose();
       assets.rustedJointMat.dispose();
@@ -774,9 +907,9 @@ export function Scrap06Unit({
     if (dist > 22) return; // Lightweight culling when player is far away in ship
 
     // Local coordinates of spark emission inside root group (near torn shoulder / loose cable)
-    const ox = -0.32;
-    const oy = 0.24;
-    const oz = 0.10;
+    const ox = -0.26;
+    const oy = 0.48;
+    const oz = 0.14;
 
     // 1. Spawn 10–14 tiny fast cyan-white spark shards
     const count = 10 + Math.floor(Math.random() * 5);
@@ -895,7 +1028,7 @@ export function Scrap06Unit({
       if (flashLife.current > 0) {
         flashLife.current = Math.max(0, flashLife.current - dt);
         const t = flashLife.current / Math.max(0.01, flashDuration.current);
-        sparkLightRef.current.intensity = t * t * 2.2;
+        sparkLightRef.current.intensity = t * t * 2.4;
       } else {
         sparkLightRef.current.intensity = 0;
       }
@@ -929,7 +1062,7 @@ export function Scrap06Unit({
         sp.y += sp.vy * dt;
         sp.z += sp.vz * dt;
 
-        // Bounce cleanly off local floor deck (y = 0.01)
+        // Bounce cleanly off local floor deck (y = 0.012)
         if (sp.y < 0.012) {
           sp.y = 0.012;
           sp.vy = Math.abs(sp.vy) * 0.35;
@@ -992,13 +1125,13 @@ export function Scrap06Unit({
   // Static scattered bolts/screws around the abandoned unit
   const scatteredBolts = useMemo(
     () => [
-      { p: [-0.46, 0.012, 0.36] as [number, number, number], r: 0.4, s: 1.0 },
+      { p: [-0.48, 0.012, 0.36] as [number, number, number], r: 0.4, s: 1.0 },
       { p: [-0.34, 0.012, 0.48] as [number, number, number], r: 1.2, s: 0.85 },
-      { p: [-0.62, 0.012, 0.18] as [number, number, number], r: 2.1, s: 1.1 },
-      { p: [0.22, 0.012, 0.52] as [number, number, number], r: 0.9, s: 0.9 },
-      { p: [0.36, 0.012, 0.26] as [number, number, number], r: 1.7, s: 0.8 },
-      { p: [-0.14, 0.012, 0.58] as [number, number, number], r: 2.8, s: 0.95 },
-      { p: [0.05, 0.012, 0.44] as [number, number, number], r: 0.3, s: 0.75 },
+      { p: [-0.64, 0.012, 0.18] as [number, number, number], r: 2.1, s: 1.1 },
+      { p: [0.24, 0.012, 0.52] as [number, number, number], r: 0.9, s: 0.9 },
+      { p: [0.38, 0.012, 0.26] as [number, number, number], r: 1.7, s: 0.8 },
+      { p: [-0.14, 0.012, 0.60] as [number, number, number], r: 2.8, s: 0.95 },
+      { p: [0.08, 0.012, 0.46] as [number, number, number], r: 0.3, s: 0.75 },
     ],
     []
   );
@@ -1010,217 +1143,299 @@ export function Scrap06Unit({
       position={SCRAP06_POSITION}
       rotation={[0, SCRAP06_ROTATION_Y, 0]}
     >
-      {/* ── Subtle Floor Reflection / Oil & Grime Pool Underneath ── */}
+      {/* ── Floor Oil & Grime Reflection Pool Underneath ── */}
       <mesh
-        position={[-0.08, 0.004, 0.16]}
-        rotation={[-Math.PI / 2, 0, 0.35]}
+        position={[-0.05, 0.004, 0.20]}
+        rotation={[-Math.PI / 2, 0, 0.32]}
         material={assets.floorOilMat}
         receiveShadow
       >
-        <planeGeometry args={[1.45, 1.25]} />
+        <planeGeometry args={[1.70, 1.45]} />
       </mesh>
 
       {/* ══════════════════════════════════════════════════════════════════
-          SLUMPED BODY & HEAD ASSEMBLY (Leaning against wall, tilted sideways)
+          SLUMPED TORSO, BACKPACK & HEAD ASSEMBLY (Tilted back against wall/pillar)
           ══════════════════════════════════════════════════════════════════ */}
-      <group position={[0, 0.17, -0.02]} rotation={[0.16, 0.08, -0.22]}>
-        {/* ── Compact Lower Pelvis / Chassis Block ── */}
-        <mesh position={[0, 0, 0]} material={assets.darkFrameMat} castShadow receiveShadow>
-          <boxGeometry args={[0.27, 0.15, 0.23]} />
-        </mesh>
+      <group position={[0, 0, 0]} rotation={[0.14, 0.06, -0.18]}>
+        {/* ── Main Damaged Torso Chassis ── */}
+        <group position={[0, 0.32, -0.02]}>
+          {/* Rounded Weathered Cream-Yellow Torso Body */}
+          <mesh geometry={assets.torsoGeo} material={assets.casingMat} castShadow receiveShadow />
 
-        {/* Rusted lower joint trim collar */}
-        <mesh position={[0, 0.075, 0]} material={assets.rustedJointMat}>
-          <cylinderGeometry args={[0.11, 0.125, 0.045, 12]} />
-        </mesh>
-
-        {/* Tiny Indicator Light on lower front chassis (occasionally flickers faintly) */}
-        <mesh position={[0.085, 0.02, 0.118]} material={assets.indicatorLedMat}>
-          <sphereGeometry args={[0.013, 8, 8]} />
-        </mesh>
-
-        {/* ── Cube-Shaped Rounded-Corner Head (Tilted Slightly Downward, Lifeless) ── */}
-        <group position={[0, 0.26, 0.02]} rotation={[0.24, -0.06, -0.08]}>
-          {/* Main Rounded Cream-Yellow Metal Head Casing */}
-          <mesh geometry={assets.headGeo} material={assets.casingMat} castShadow receiveShadow />
-
-          {/* Corner Dent / Battered Scuff Plates on Top-Left & Bottom-Right Corners */}
-          <mesh position={[-0.205, 0.145, 0.13]} rotation={[0.22, -0.3, 0.4]} material={assets.darkFrameMat}>
-            <boxGeometry args={[0.065, 0.032, 0.08]} />
+          {/* Dented / Crushed Corner Reinforcement on Upper Left Shoulder */}
+          <mesh position={[-0.25, 0.26, 0.14]} rotation={[0.2, -0.25, 0.35]} material={assets.darkFrameMat}>
+            <boxGeometry args={[0.09, 0.045, 0.12]} />
           </mesh>
-          <mesh position={[0.20, -0.145, 0.14]} rotation={[-0.2, 0.25, -0.35]} material={assets.rustedJointMat}>
-            <boxGeometry args={[0.055, 0.028, 0.065]} />
+          <mesh position={[0.25, -0.26, 0.16]} rotation={[-0.15, 0.2, -0.28]} material={assets.rustedJointMat}>
+            <boxGeometry args={[0.08, 0.04, 0.10]} />
           </mesh>
 
-          {/* Top Reinforcement Cap + Accumulated Dust Layer */}
-          <mesh position={[0, 0.178, -0.01]} material={assets.brassTrimMat}>
-            <boxGeometry args={[0.32, 0.024, 0.27]} />
-          </mesh>
-          <mesh position={[0, 0.193, -0.01]} material={assets.dustMat}>
-            <boxGeometry args={[0.30, 0.008, 0.25]} />
-          </mesh>
+          {/* Front Chest Armor Plate with Industrial Hazard Stripes */}
+          <mesh
+            position={[0, 0.07, 0.215]}
+            geometry={assets.chestPlateGeo}
+            material={assets.chestMat}
+            castShadow
+            receiveShadow
+          />
 
-          {/* Damaged Serial-Number Label Plate ("SCRAP-06") on Right Side & Lower Cheek */}
-          <mesh position={[0.227, -0.01, 0.01]} rotation={[0, Math.PI / 2, 0]} material={assets.serialMat}>
-            <planeGeometry args={[0.18, 0.068]} />
-          </mesh>
-          <mesh position={[0, -0.128, 0.188]} material={assets.serialMat}>
-            <planeGeometry args={[0.16, 0.052]} />
-          </mesh>
-
-          {/* ── Recessed Dark Faceplate (Lifeless, NO Smile / Mouth) ── */}
-          <mesh position={[0, 0.015, 0.175]} material={assets.darkFrameMat}>
-            <boxGeometry args={[0.35, 0.185, 0.035]} />
-          </mesh>
-
-          {/* ── Left Eye: Cracked & Barely Functional (Occasional Faint Cyan Flicker) ── */}
-          <group position={[-0.088, 0.02, 0.192]}>
-            <mesh rotation={[Math.PI / 2, 0, 0]} material={assets.brassTrimMat}>
-              <cylinderGeometry args={[0.066, 0.072, 0.028, 18]} />
+          {/* Breached Maintenance Bay (Left Chest: Jagged Pried-Open Hatch with Exposed Circuitry) */}
+          <group position={[-0.11, 0.05, 0.22]}>
+            {/* Recessed dark interior cavity */}
+            <mesh position={[0, 0, -0.03]} material={assets.darkFrameMat}>
+              <boxGeometry args={[0.18, 0.15, 0.06]} />
             </mesh>
-            <mesh position={[0, 0, 0.013]} rotation={[Math.PI / 2, 0, 0]} material={assets.crackedEyeMat}>
-              <cylinderGeometry args={[0.054, 0.054, 0.012, 18]} />
+            {/* Burnt internal components */}
+            <mesh position={[-0.04, 0.02, -0.015]} material={assets.darkFrameMat}>
+              <cylinderGeometry args={[0.02, 0.02, 0.07, 8]} />
+            </mesh>
+            <mesh position={[0.04, -0.02, -0.015]} material={assets.copperWireMat}>
+              <cylinderGeometry args={[0.016, 0.016, 0.06, 8]} />
+            </mesh>
+            {/* Internal exposed wire loops inside cavity */}
+            <mesh geometry={assets.internalWiresGeo} material={assets.copperWireMat} />
+            {/* Pried-open bent metal hatch cover hanging ajar */}
+            <mesh position={[-0.06, 0, 0.025]} rotation={[0.15, 0.45, -0.32]} material={assets.casingMat}>
+              <boxGeometry args={[0.15, 0.14, 0.012]} />
             </mesh>
           </group>
 
-          {/* ── Right Eye: Completely Dark / Unpowered ── */}
-          <group position={[0.088, 0.014, 0.192]}>
-            <mesh rotation={[Math.PI / 2, 0, 0]} material={assets.rustedJointMat}>
-              <cylinderGeometry args={[0.062, 0.068, 0.028, 18]} />
-            </mesh>
-            <mesh position={[0, 0, 0.013]} rotation={[Math.PI / 2, 0, 0]} material={assets.deadEyeMat}>
-              <cylinderGeometry args={[0.050, 0.050, 0.012, 18]} />
-            </mesh>
-          </group>
-
-          {/* ── Bent & Partially Broken Top Antenna ── */}
-          <group position={[0.13, 0.185, -0.05]}>
-            {/* Rusted Base Mount */}
-            <mesh material={assets.rustedJointMat}>
-              <cylinderGeometry args={[0.022, 0.028, 0.03, 8]} />
-            </mesh>
-            {/* Lower Bent Segment */}
-            <mesh position={[-0.022, 0.062, 0.012]} rotation={[0.18, 0, 0.34]} material={assets.darkFrameMat}>
-              <cylinderGeometry args={[0.007, 0.009, 0.13, 6]} />
-            </mesh>
-            {/* Sharp Kinked Upper Broken Stub (missing top tip) */}
-            <mesh position={[-0.072, 0.118, 0.036]} rotation={[0.35, 0, 1.18]} material={assets.rustedJointMat}>
-              <cylinderGeometry args={[0.0055, 0.007, 0.085, 6]} />
-            </mesh>
-            {/* Tiny frayed snapped wire at broken tip */}
-            <mesh position={[-0.115, 0.125, 0.05]} rotation={[0.2, 0.4, 1.5]} material={assets.copperWireMat}>
-              <cylinderGeometry args={[0.0022, 0.0022, 0.032, 4]} />
-            </mesh>
-          </group>
-        </group>
-
-        {/* ── Damaged Left Shoulder Socket (Arm Completely Missing) ── */}
-        <group position={[-0.145, 0.05, 0.01]}>
-          <mesh rotation={[0, 0, Math.PI / 2]} material={assets.rustedJointMat}>
-            <cylinderGeometry args={[0.048, 0.056, 0.045, 10]} />
-          </mesh>
-          <mesh position={[-0.02, 0, 0]} rotation={[0, 0, Math.PI / 2]} material={assets.darkFrameMat}>
-            <cylinderGeometry args={[0.034, 0.034, 0.02, 10]} />
-          </mesh>
-        </group>
-
-        {/* ── Remaining Right Arm (Hanging Loosely at Unnatural Angle onto Floor) ── */}
-        <group position={[0.155, 0.045, 0.02]} rotation={[0.32, -0.18, 0.62]}>
-          {/* Rusted Shoulder Ball Joint */}
-          <mesh material={assets.rustedJointMat}>
-            <sphereGeometry args={[0.042, 10, 10]} />
-          </mesh>
-          {/* Thin Upper Arm Strut */}
-          <mesh position={[0, -0.105, 0]} material={assets.casingMat}>
-            <cylinderGeometry args={[0.022, 0.018, 0.21, 8]} />
-          </mesh>
-          {/* Exposed Wire Loop Near Damaged Elbow Joint */}
-          <mesh geometry={assets.elbowWireGeo} material={assets.copperWireMat} />
-          {/* Limp Articulated Elbow & Forearm Resting on Floor */}
-          <group position={[0, -0.21, 0]} rotation={[0.78, 0.25, -0.45]}>
+          {/* Lower Tech Grille (Ventilation slats & filter screen) */}
+          <group position={[0.07, -0.16, 0.215]}>
             <mesh material={assets.darkFrameMat}>
-              <sphereGeometry args={[0.03, 8, 8]} />
+              <boxGeometry args={[0.30, 0.13, 0.028]} />
             </mesh>
-            <mesh position={[0, -0.095, 0]} material={assets.brassTrimMat}>
-              <cylinderGeometry args={[0.017, 0.014, 0.19, 8]} />
+            {/* Slotted horizontal slats */}
+            {[-0.04, -0.012, 0.016, 0.044].map((yOff, idx) => (
+              <mesh key={`slat-${idx}`} position={[0, yOff, 0.016]} material={assets.brassTrimMat}>
+                <boxGeometry args={[0.26, 0.012, 0.01]} />
+              </mesh>
+            ))}
+            {/* Tiny dying indicator LED */}
+            <mesh position={[0.11, 0.03, 0.02]} material={assets.indicatorLedMat}>
+              <sphereGeometry args={[0.012, 8, 8]} />
             </mesh>
-            {/* Small Maintenance Clamp Hand */}
-            <group position={[0, -0.20, 0]}>
+          </group>
+
+          {/* Rear Power Backpack / Energy Core Canister (Resting against cockpit wall/pillar) */}
+          <group position={[0, 0.04, -0.24]}>
+            {/* Main Power Cylinder */}
+            <mesh material={assets.darkFrameMat} castShadow>
+              <cylinderGeometry args={[0.14, 0.14, 0.46, 14]} />
+            </mesh>
+            {/* Upper and lower mounting brackets */}
+            <mesh position={[0, 0.18, 0.02]} material={assets.rustedJointMat}>
+              <boxGeometry args={[0.34, 0.045, 0.12]} />
+            </mesh>
+            <mesh position={[0, -0.18, 0.02]} material={assets.rustedJointMat}>
+              <boxGeometry args={[0.34, 0.045, 0.12]} />
+            </mesh>
+            {/* Heat-sink cooling fins */}
+            {[-0.10, -0.03, 0.04, 0.11].map((fy, i) => (
+              <mesh key={`fin-${i}`} position={[0, fy, 0]} material={assets.casingMat}>
+                <cylinderGeometry args={[0.158, 0.158, 0.012, 14]} />
+              </mesh>
+            ))}
+            {/* Charred unpowered power core ring */}
+            <mesh position={[0, 0.04, 0]} material={assets.deadEyeMat}>
+              <cylinderGeometry args={[0.145, 0.145, 0.10, 14]} />
+            </mesh>
+          </group>
+
+          {/* ── Heavy Neck Collar & Universal Pivot ── */}
+          <group position={[0, 0.31, 0.02]}>
+            {/* Rusted outer collar ring */}
+            <mesh material={assets.rustedJointMat}>
+              <cylinderGeometry args={[0.13, 0.15, 0.08, 14]} />
+            </mesh>
+            {/* Ribbed rubber flexible sleeve */}
+            <mesh position={[0, 0.04, 0]} material={assets.cableRubberMat}>
+              <cylinderGeometry args={[0.10, 0.10, 0.06, 12]} />
+            </mesh>
+
+            {/* ── Cube-Shaped Head (Tilted Downward, Drooping Lifelessly) ── */}
+            <group position={[0, 0.20, 0.02]} rotation={[0.26, -0.08, -0.12]}>
+              {/* Main Rounded Cream-Yellow Head Casing */}
+              <mesh geometry={assets.headGeo} material={assets.casingMat} castShadow receiveShadow />
+
+              {/* Head Scuff / Dented Corner Brackets */}
+              <mesh position={[-0.20, 0.14, 0.12]} rotation={[0.22, -0.3, 0.4]} material={assets.darkFrameMat}>
+                <boxGeometry args={[0.065, 0.032, 0.08]} />
+              </mesh>
+              <mesh position={[0.20, -0.14, 0.13]} rotation={[-0.2, 0.25, -0.35]} material={assets.rustedJointMat}>
+                <boxGeometry args={[0.055, 0.028, 0.065]} />
+              </mesh>
+
+              {/* Top Reinforcement Cap + Accumulated Dust Layer */}
+              <mesh position={[0, 0.168, -0.01]} material={assets.brassTrimMat}>
+                <boxGeometry args={[0.32, 0.024, 0.27]} />
+              </mesh>
+              <mesh position={[0, 0.182, -0.01]} material={assets.dustMat}>
+                <boxGeometry args={[0.30, 0.008, 0.25]} />
+              </mesh>
+
+              {/* Serial Label Plate ("SCRAP-06") on Side & Cheek */}
+              <mesh position={[0.222, -0.01, 0.01]} rotation={[0, Math.PI / 2, 0]} material={assets.serialMat}>
+                <planeGeometry args={[0.18, 0.068]} />
+              </mesh>
+              <mesh position={[0, -0.122, 0.182]} material={assets.serialMat}>
+                <planeGeometry args={[0.16, 0.052]} />
+              </mesh>
+
+              {/* Recessed Dark Faceplate (Lifeless, No Smile) */}
+              <mesh position={[0, 0.015, 0.17]} material={assets.darkFrameMat}>
+                <boxGeometry args={[0.34, 0.18, 0.035]} />
+              </mesh>
+
+              {/* Left Eye: Cracked & Barely Functional (Faint Cyan Flicker) */}
+              <group position={[-0.088, 0.02, 0.188]}>
+                <mesh rotation={[Math.PI / 2, 0, 0]} material={assets.brassTrimMat}>
+                  <cylinderGeometry args={[0.066, 0.072, 0.028, 18]} />
+                </mesh>
+                <mesh position={[0, 0, 0.013]} rotation={[Math.PI / 2, 0, 0]} material={assets.crackedEyeMat}>
+                  <cylinderGeometry args={[0.054, 0.054, 0.012, 18]} />
+                </mesh>
+              </group>
+
+              {/* Right Eye: Completely Dark / Unpowered */}
+              <group position={[0.088, 0.014, 0.188]}>
+                <mesh rotation={[Math.PI / 2, 0, 0]} material={assets.rustedJointMat}>
+                  <cylinderGeometry args={[0.062, 0.068, 0.028, 18]} />
+                </mesh>
+                <mesh position={[0, 0, 0.013]} rotation={[Math.PI / 2, 0, 0]} material={assets.deadEyeMat}>
+                  <cylinderGeometry args={[0.050, 0.050, 0.012, 18]} />
+                </mesh>
+              </group>
+
+              {/* Bent & Partially Broken Top Antenna */}
+              <group position={[0.13, 0.175, -0.05]}>
+                <mesh material={assets.rustedJointMat}>
+                  <cylinderGeometry args={[0.022, 0.028, 0.03, 8]} />
+                </mesh>
+                <mesh position={[-0.022, 0.062, 0.012]} rotation={[0.18, 0, 0.34]} material={assets.darkFrameMat}>
+                  <cylinderGeometry args={[0.007, 0.009, 0.13, 6]} />
+                </mesh>
+                <mesh position={[-0.072, 0.118, 0.036]} rotation={[0.35, 0, 1.18]} material={assets.rustedJointMat}>
+                  <cylinderGeometry args={[0.0055, 0.007, 0.085, 6]} />
+                </mesh>
+                <mesh position={[-0.115, 0.125, 0.05]} rotation={[0.2, 0.4, 1.5]} material={assets.copperWireMat}>
+                  <cylinderGeometry args={[0.0022, 0.0022, 0.032, 4]} />
+                </mesh>
+              </group>
+            </group>
+          </group>
+
+          {/* ── Damaged Left Shoulder Socket (Arm Completely Missing) ── */}
+          <group position={[-0.27, 0.18, 0.03]}>
+            <mesh rotation={[0, 0, Math.PI / 2]} material={assets.rustedJointMat}>
+              <cylinderGeometry args={[0.056, 0.068, 0.055, 12]} />
+            </mesh>
+            <mesh position={[-0.025, 0, 0]} rotation={[0, 0, Math.PI / 2]} material={assets.darkFrameMat}>
+              <cylinderGeometry args={[0.040, 0.040, 0.025, 12]} />
+            </mesh>
+            {/* Exposed jagged sheared bolts */}
+            {[-0.03, 0.03].map((by, i) => (
+              <mesh key={`bolt-sh-${i}`} position={[-0.03, by, 0.02]} rotation={[0, 0, Math.PI / 2]} material={assets.copperWireMat}>
+                <cylinderGeometry args={[0.006, 0.006, 0.025, 6]} />
+              </mesh>
+            ))}
+            {/* Exposed wire stubs spilling directly out of the torn socket */}
+            <mesh geometry={assets.exposedWireGeos[0]} material={assets.copperWireMat} />
+            <mesh geometry={assets.exposedWireGeos[1]} material={assets.cyanWireMat} />
+            <mesh geometry={assets.exposedWireGeos[2]} material={assets.copperWireMat} />
+          </group>
+
+          {/* ── Remaining Right Arm (Hanging Limp at Unnatural Angle to Deck) ── */}
+          <group position={[0.27, 0.18, 0.03]} rotation={[0.35, -0.15, 0.58]}>
+            {/* Shoulder Ball Joint */}
+            <mesh material={assets.rustedJointMat}>
+              <sphereGeometry args={[0.052, 10, 10]} />
+            </mesh>
+            {/* Upper Arm Cylinder */}
+            <mesh position={[0, -0.13, 0]} material={assets.casingMat}>
+              <cylinderGeometry args={[0.026, 0.022, 0.26, 8]} />
+            </mesh>
+            {/* Exposed Wire Loop at Damaged Elbow */}
+            <mesh geometry={assets.elbowWireGeo} material={assets.copperWireMat} />
+            {/* Forearm & Hand Resting on Floor Deck */}
+            <group position={[0, -0.26, 0]} rotation={[0.72, 0.22, -0.42]}>
               <mesh material={assets.darkFrameMat}>
-                <boxGeometry args={[0.044, 0.032, 0.04]} />
+                <sphereGeometry args={[0.035, 8, 8]} />
               </mesh>
-              <mesh position={[-0.016, -0.032, 0.008]} rotation={[0.15, 0, 0.22]} material={assets.rustedJointMat}>
-                <boxGeometry args={[0.01, 0.042, 0.016]} />
+              <mesh position={[0, -0.12, 0]} material={assets.brassTrimMat}>
+                <cylinderGeometry args={[0.020, 0.016, 0.24, 8]} />
               </mesh>
-              <mesh position={[0.016, -0.032, 0.008]} rotation={[0.15, 0, -0.22]} material={assets.rustedJointMat}>
-                <boxGeometry args={[0.01, 0.042, 0.016]} />
+              {/* Maintenance Clamp Hand */}
+              <group position={[0, -0.25, 0]}>
+                <mesh material={assets.darkFrameMat}>
+                  <boxGeometry args={[0.052, 0.038, 0.048]} />
+                </mesh>
+                <mesh position={[-0.018, -0.036, 0.01]} rotation={[0.15, 0, 0.22]} material={assets.rustedJointMat}>
+                  <boxGeometry args={[0.012, 0.048, 0.020]} />
+                </mesh>
+                <mesh position={[0.018, -0.036, 0.01]} rotation={[0.15, 0, -0.22]} material={assets.rustedJointMat}>
+                  <boxGeometry args={[0.012, 0.048, 0.020]} />
+                </mesh>
+              </group>
+            </group>
+          </group>
+
+          {/* ── Collapsed Legs (Articulated, Buckled Under the Torso) ── */}
+          {/* Left Leg: Buckled awkwardly mid-stride */}
+          <group position={[-0.16, -0.26, 0.05]} rotation={[0.95, -0.42, 0.38]}>
+            <mesh material={assets.rustedJointMat}>
+              <sphereGeometry args={[0.046, 10, 10]} />
+            </mesh>
+            <mesh position={[0, -0.13, 0]} material={assets.casingMat}>
+              <cylinderGeometry args={[0.026, 0.022, 0.26, 8]} />
+            </mesh>
+            <group position={[0, -0.26, 0]} rotation={[-1.42, 0.15, -0.25]}>
+              <mesh material={assets.darkFrameMat}>
+                <sphereGeometry args={[0.034, 8, 8]} />
+              </mesh>
+              <mesh position={[0, -0.12, 0]} material={assets.brassTrimMat}>
+                <cylinderGeometry args={[0.020, 0.016, 0.24, 8]} />
+              </mesh>
+              <mesh position={[0, -0.24, 0.025]} rotation={[0.35, 0, 0]} material={assets.darkFrameMat}>
+                <boxGeometry args={[0.08, 0.03, 0.13]} />
+              </mesh>
+            </group>
+          </group>
+
+          {/* Right Leg: Stretched flat along the cockpit floor deck */}
+          <group position={[0.16, -0.26, 0.05]} rotation={[1.32, 0.28, -0.15]}>
+            <mesh material={assets.rustedJointMat}>
+              <sphereGeometry args={[0.046, 10, 10]} />
+            </mesh>
+            <mesh position={[0, -0.14, 0]} material={assets.casingMat}>
+              <cylinderGeometry args={[0.026, 0.022, 0.28, 8]} />
+            </mesh>
+            <group position={[0, -0.28, 0]} rotation={[-0.45, -0.12, 0.08]}>
+              <mesh material={assets.darkFrameMat}>
+                <sphereGeometry args={[0.034, 8, 8]} />
+              </mesh>
+              <mesh position={[0, -0.12, 0]} material={assets.brassTrimMat}>
+                <cylinderGeometry args={[0.020, 0.016, 0.24, 8]} />
+              </mesh>
+              <mesh position={[0, -0.24, 0.03]} rotation={[-0.78, 0, 0.15]} material={assets.darkFrameMat}>
+                <boxGeometry args={[0.08, 0.03, 0.13]} />
               </mesh>
             </group>
           </group>
         </group>
       </group>
 
-      {/* ══════════════════════════════════════════════════════════════════
-          COLLAPSED THIN ARTICULATED MECHANICAL LEGS
-          ══════════════════════════════════════════════════════════════════ */}
-      {/* ── Left Leg: Bent Awkwardly as Though Collapsed Mid-Step ── */}
-      <group position={[-0.11, 0.12, 0.03]} rotation={[0.92, -0.48, 0.35]}>
-        <mesh material={assets.rustedJointMat}>
-          <sphereGeometry args={[0.038, 10, 10]} />
-        </mesh>
-        <mesh position={[0, -0.105, 0]} material={assets.casingMat}>
-          <cylinderGeometry args={[0.022, 0.018, 0.21, 8]} />
-        </mesh>
-        <group position={[0, -0.21, 0]} rotation={[-1.48, 0.12, -0.22]}>
-          <mesh material={assets.darkFrameMat}>
-            <sphereGeometry args={[0.028, 8, 8]} />
-          </mesh>
-          <mesh position={[0, -0.105, 0]} material={assets.brassTrimMat}>
-            <cylinderGeometry args={[0.017, 0.014, 0.21, 8]} />
-          </mesh>
-          <mesh position={[0, -0.215, 0.02]} rotation={[0.35, 0, 0]} material={assets.darkFrameMat}>
-            <boxGeometry args={[0.068, 0.024, 0.11]} />
-          </mesh>
-        </group>
-      </group>
-
-      {/* ── Right Leg: Slumped Outstretched Resting Against Floor ── */}
-      <group position={[0.10, 0.11, 0.04]} rotation={[1.28, 0.32, -0.18]}>
-        <mesh material={assets.rustedJointMat}>
-          <sphereGeometry args={[0.038, 10, 10]} />
-        </mesh>
-        <mesh position={[0, -0.11, 0]} material={assets.casingMat}>
-          <cylinderGeometry args={[0.022, 0.018, 0.22, 8]} />
-        </mesh>
-        <group position={[0, -0.22, 0]} rotation={[-0.42, -0.15, 0.1]}>
-          <mesh material={assets.darkFrameMat}>
-            <sphereGeometry args={[0.028, 8, 8]} />
-          </mesh>
-          <mesh position={[0, -0.105, 0]} material={assets.brassTrimMat}>
-            <cylinderGeometry args={[0.017, 0.014, 0.21, 8]} />
-          </mesh>
-          <mesh position={[0, -0.215, 0.025]} rotation={[-0.82, 0, 0.15]} material={assets.darkFrameMat}>
-            <boxGeometry args={[0.068, 0.024, 0.11]} />
-          </mesh>
-        </group>
-      </group>
-
-      {/* ══════════════════════════════════════════════════════════════════
-          EXPOSED WIRING & LOOSE HANGING CABLE ON DAMAGED SIDE
-          ══════════════════════════════════════════════════════════════════ */}
+      {/* ── Dangling Heavy Power Cable (from torn shoulder to floor deck) ── */}
       <mesh geometry={assets.danglingCableGeo} material={assets.cableRubberMat} />
-      <mesh geometry={assets.exposedWireGeos[0]} material={assets.copperWireMat} />
-      <mesh geometry={assets.exposedWireGeos[1]} material={assets.cyanWireMat} />
-      <mesh geometry={assets.exposedWireGeos[2]} material={assets.copperWireMat} />
 
-      {/* Spark Emission Anchor & Brief Local Cyan-White Flash Light */}
-      <object3D ref={sparkOriginRef} position={[-0.32, 0.24, 0.10]} />
+      {/* ── Subtle Spark Emission Point & Local Flash Light ── */}
+      <object3D ref={sparkOriginRef} position={[-0.26, 0.48, 0.14]} />
       <pointLight
         ref={sparkLightRef}
-        position={[-0.30, 0.26, 0.14]}
+        position={[-0.25, 0.50, 0.16]}
         color="#84f5ff"
         intensity={0}
-        distance={3.8}
+        distance={4.2}
         decay={2}
       />
 
